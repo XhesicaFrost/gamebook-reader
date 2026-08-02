@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>岔路书签 · 游戏书阅读器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#reader">跳到 PDF 阅读区</a>
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 4.5h7a3 3 0 0 1 3 3v12H9a3 3 0 0 0-3 3v-18Z"/><path d="M18 7.5h-2M9.5 9H13M9.5 13H13"/></svg>
+      </div>
+      <div>
+        <h1>岔路书签</h1>
+        <p class="book-meta"><span id="bookName">尚未选择 PDF</span><span id="autosaveStatus">等待选择</span></p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <label class="button button-primary file-button" for="pdfInput">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg>
+        选择 PDF
+      </label>
+      <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
+
+      <button id="moreButton" class="button button-quiet" type="button" aria-expanded="false" aria-controls="moreMenu">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        数据
+      </button>
+      <div id="moreMenu" class="menu" hidden>
+        <button id="exportButton" type="button">导出书签数据</button>
+        <label for="importInput">导入书签数据</label>
+        <input id="importInput" type="file" accept="application/json,.json" hidden>
+        <button id="resetButton" class="danger-text" type="button">清空当前书籍数据</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section id="reader" class="reader-panel" aria-label="PDF 阅读器">
+      <div class="reader-toolbar">
+        <div class="toolbar-group">
+          <button id="backButton" class="icon-button" type="button" aria-label="回溯到上一个阅读位置" title="回溯到上一个阅读位置">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m10 7-5 5 5 5M5 12h10a4 4 0 0 1 4 4v1"/></svg>
+          </button>
+          <button id="previousPageButton" class="icon-button" type="button" aria-label="上一 PDF 页" title="上一 PDF 页">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="page-readout" aria-live="polite">
+            <span>PDF 页</span>
+            <strong><span id="currentPdfPage">1</span><small> / <span id="totalPdfPages">—</span></small></strong>
+          </div>
+          <button id="nextPageButton" class="icon-button" type="button" aria-label="下一 PDF 页" title="下一 PDF 页">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <form id="jumpForm" class="jump-form">
+          <label for="jumpInput">节点或书中页码</label>
+          <input id="jumpInput" inputmode="numeric" autocomplete="off" placeholder="例如 42" required>
+          <button class="button button-primary" type="submit">跳转</button>
+        </form>
+
+        <div class="zoom-controls" aria-label="PDF 缩放">
+          <button id="zoomOutButton" class="icon-button" type="button" aria-label="缩小 PDF" title="缩小 PDF">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 12h10"/></svg>
+          </button>
+          <span id="zoomLabel">适合</span>
+          <button id="zoomInButton" class="icon-button" type="button" aria-label="放大 PDF" title="放大 PDF">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7v10M7 12h10"/></svg>
+          </button>
+        </div>
+
+        <button id="sidebarToggleButton" class="icon-button" type="button" aria-label="收起节点侧栏" title="收起节点侧栏" aria-expanded="true" aria-controls="nodeSidebar">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM15 5v14M11 9l-3 3 3 3"/></svg>
+        </button>
+
+        <button id="fullscreenButton" class="icon-button" type="button" aria-label="全屏阅读" title="全屏阅读">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+        </button>
+      </div>
+
+      <div id="pdfStage" class="pdf-stage">
+        <div id="pdfEmpty" class="empty-reader">
+          <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M13 5h16l8 8v30H13z"/><path d="M29 5v9h8M19 24h12M19 30h12"/></svg>
+          <h2>选择一本扫描版 PDF</h2>
+          <p>文件只会在你的浏览器中打开，不会上传。</p>
+          <label class="button button-primary" for="pdfInput">选择 PDF</label>
+        </div>
+        <div id="pdfViewport" class="pdf-viewport" hidden>
+          <canvas id="pdfCanvas" aria-label="当前 PDF 页面"></canvas>
+        </div>
+        <div id="pdfLoading" class="pdf-loading" role="status" aria-live="polite" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="pdfLoadingText">正在读取 PDF…</span>
+        </div>
+      </div>
+    </section>
+
+    <aside id="nodeSidebar" class="sidebar" aria-label="节点和阅读记录">
+      <section class="settings-strip">
+        <div>
+          <label for="offsetInput">页码偏移</label>
+          <p>PDF 页 = 书中页 + 偏移</p>
+        </div>
+        <input id="offsetInput" type="number" value="0" inputmode="numeric">
+      </section>
+
+      <section id="currentNodeCard" class="current-node-card">
+        <div id="noCurrentNode" class="empty-card">
+          <p class="eyebrow">选中节点</p>
+          <h2>还没有选中节点</h2>
+          <p>添加节点，或在下方节点列表中选择一个。</p>
+        </div>
+
+        <div id="currentNodeContent" hidden>
+          <div class="current-node-heading">
+            <div>
+              <p class="eyebrow">选中节点</p>
+              <div class="title-line">
+                <h2 id="currentNodeTitle"></h2>
+                <span id="currentNodeStatus" class="status-badge"></span>
+              </div>
+              <p id="currentNodeMeta" class="muted"></p>
+            </div>
+            <div class="current-node-actions">
+              <button id="jumpSelectedNodeButton" class="button button-primary compact-button" type="button">跳转</button>
+              <button id="editCurrentNodeButton" class="icon-button" type="button" aria-label="编辑选中节点" title="编辑选中节点">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
+              </button>
+              <div class="node-action-menu-wrap">
+                <button id="nodeMoreButton" class="button button-quiet compact-button" type="button" aria-expanded="false" aria-controls="nodeActionMenu">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                  更多
+                </button>
+                <div id="nodeActionMenu" class="node-action-menu" hidden>
+                  <button id="deleteSelectedNodeButton" class="danger-text" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M8 7l1 13h6l1-13M10 11v5M14 11v5"/></svg>
+                    删除节点
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p id="currentNodeTags" class="tag-line"></p>
+          <p id="currentNodeNote" class="node-note"></p>
+
+          <div class="section-heading compact">
+            <h3>从这里可以前往</h3>
+            <button id="addChoiceButton" class="text-button" type="button">添加关系</button>
+          </div>
+          <div id="choiceList" class="choice-list"></div>
+          <form id="choiceForm" class="choice-form" hidden>
+            <label for="choiceLabel">选项文字</label>
+            <input id="choiceLabel" placeholder="例如：进入山洞" required>
+            <label for="choiceTarget">目标节点</label>
+            <select id="choiceTarget" required></select>
+            <div class="form-actions">
+              <button id="cancelChoiceButton" class="button button-quiet" type="button">取消</button>
+              <button id="saveChoiceButton" class="button button-primary" type="submit">保存关系</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="node-browser">
+        <div class="section-heading">
+          <div>
+            <h2>节点</h2>
+            <p id="nodeCount">0 个节点</p>
+          </div>
+          <div class="node-heading-actions">
+            <button id="openGraphButton" class="button button-quiet compact-button" type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8.5 6.2 7 .5M7.4 8.2l3.3 7.4M16.8 9.2l-3.5 6.5"/></svg>
+              关系图
+            </button>
+            <button id="addNodeButton" class="button button-primary compact-button" type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              添加
+            </button>
+          </div>
+        </div>
+        <label class="search-field" for="nodeSearch">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+          <span class="sr-only">搜索节点</span>
+          <input id="nodeSearch" type="search" placeholder="搜索编号、标题或标记">
+        </label>
+        <div id="nodeList" class="node-list"></div>
+      </section>
+
+      <details class="history-panel">
+        <summary>阅读历史 <span id="historyCount">0</span></summary>
+        <div id="historyList" class="history-list"></div>
+      </details>
+    </aside>
+  </main>
+
+  <dialog id="nodeDialog">
+    <form id="nodeForm" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">节点资料</p>
+          <h2 id="nodeDialogTitle">添加节点</h2>
+        </div>
+        <button id="closeNodeDialogButton" class="icon-button" type="button" aria-label="关闭">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <input id="editingNodeId" type="hidden">
+      <div class="form-grid">
+        <label>
+          节点编号或名称 <span aria-hidden="true">*</span>
+          <input id="nodeIdInput" autocomplete="off" placeholder="例如 42" required>
+        </label>
+        <label>
+          标题
+          <input id="nodeTitleInput" autocomplete="off" placeholder="例如 黑森林入口">
+        </label>
+        <label>
+          书中页码
+          <input id="bookPageInput" type="number" min="1" inputmode="numeric" placeholder="例如 42">
+        </label>
+        <label>
+          PDF 页码
+          <input id="nodePdfPageInput" type="number" min="1" inputmode="numeric" placeholder="留空则自动计算">
+          <small>留空时使用“书中页码 + 偏移”</small>
+        </label>
+        <label>
+          标记
+          <select id="nodeStatusInput">
+            <option value="none">无标记</option>
+            <option value="important">重要</option>
+            <option value="clue">线索</option>
+            <option value="danger">危险</option>
+            <option value="done">已完成</option>
+          </select>
+        </label>
+        <label>
+          文本标签
+          <input id="nodeTagsInput" autocomplete="off" placeholder="钥匙, 商店, 未探索">
+        </label>
+        <label class="full-width">
+          备注
+          <textarea id="nodeNoteInput" rows="5" placeholder="记录道具、线索、战斗结果或其他想法"></textarea>
+        </label>
+      </div>
+      <p id="nodeFormError" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button id="deleteNodeButton" class="button button-danger" type="button" hidden>删除节点</button>
+        <span class="spacer"></span>
+        <button id="cancelNodeButton" class="button button-quiet" type="button">取消</button>
+        <button class="button button-primary" type="submit">保存节点</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="graphDialog" class="graph-dialog">
+    <section class="graph-shell">
+      <header class="graph-header">
+        <div>
+          <p class="eyebrow">非线性路线</p>
+          <h2>节点关系图</h2>
+        </div>
+        <div class="graph-controls" aria-label="关系图控制">
+          <button id="graphZoomOutButton" class="icon-button" type="button" aria-label="缩小关系图" title="缩小关系图">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 12h10"/></svg>
+          </button>
+          <button id="graphFitButton" class="button button-quiet compact-button" type="button">适合</button>
+          <button id="graphZoomInButton" class="icon-button" type="button" aria-label="放大关系图" title="放大关系图">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7v10M7 12h10"/></svg>
+          </button>
+          <button id="closeGraphButton" class="icon-button" type="button" aria-label="关闭关系图" title="关闭关系图">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </header>
+      <div id="graphViewport" class="graph-viewport">
+        <p id="graphEmpty" class="graph-empty">还没有节点，先添加节点和跳转关系。</p>
+        <svg id="graphSvg" class="graph-svg" role="img" aria-label="游戏书节点关系图"></svg>
+      </div>
+      <footer class="graph-footer">
+        <span id="graphSelectionLabel">尚未选中节点</span>
+        <button id="graphJumpButton" class="button button-primary" type="button" disabled>跳转到选中节点</button>
+      </footer>
+    </section>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toastMessage"></span>
+    <button id="toastAction" type="button" hidden>撤销</button>
+  </div>
+
+  <script src="vendor/pdfjs-bundle.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
