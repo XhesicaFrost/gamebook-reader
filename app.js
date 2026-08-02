@@ -222,6 +222,19 @@
     els.pdfLoading.hidden = true;
   }
 
+  class EmbeddedPdfBinaryDataFactory {
+    async fetch({ filename }) {
+      const encoded = window.PDFJS_WASM_DATA?.[filename];
+      if (!encoded) throw new Error(`没有内置 PDF 解码资源：${filename}`);
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return bytes;
+    }
+  }
+
   async function renderPdfPage() {
     if (!pdfDocument) return;
     const token = ++pdfRenderToken;
@@ -285,7 +298,14 @@
       if (pdfLoadingTask) await pdfLoadingTask.destroy();
       if (pdfDocument) await pdfDocument.destroy();
       const data = new Uint8Array(await file.arrayBuffer());
-      pdfLoadingTask = window.pdfjsLib.getDocument({ data, isEvalSupported: false });
+      const isLocalFile = location.protocol === "file:";
+      pdfLoadingTask = window.pdfjsLib.getDocument({
+        data,
+        isEvalSupported: false,
+        wasmUrl: new URL("vendor/pdfjs-wasm/", document.baseURI).href,
+        useWorkerFetch: false,
+        BinaryDataFactory: isLocalFile ? EmbeddedPdfBinaryDataFactory : undefined
+      });
       pdfDocument = await pdfLoadingTask.promise;
       pdfLoadingTask = null;
       const hadSavedBookmarks = Boolean(library[file.name]);

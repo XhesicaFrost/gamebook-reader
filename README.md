@@ -51,4 +51,6 @@ PDF 文件只在本机浏览器中打开，不会上传。导出的 JSON 只包�
 
 ## 浏览器说明
 
-本工具内置 PDF.js 5.7.284，直接把指定页面绘制到 Canvas，不再依赖浏览器自带 PDF 插件。PDF.js 及其许可证位于 `vendor/` 目录。
+本工具内置 PDF.js 5.7.284，直接把指定页面绘制到 Canvas，不再依赖浏览器自带 PDF 插件。同时内置 JBIG2、JPEG 2000 和色彩管理所需的 WASM 资源，用于兼容黑白扫描书和其他特殊图像编码；直接双击 `index.html` 离线使用时也能读取 JBIG2 和 JPEG 2000 页面。PDF.js 及其许可证位于 `vendor/` 目录。
+
+更新 `vendor/pdfjs-wasm/` 中的解码文件后，运行 `node generate-wasm-data.mjs` 可重新生成双击模式使用的内嵌数据。
