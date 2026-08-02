@@ -67,7 +67,7 @@
     nodePdfPageInput: $("nodePdfPageInput"), nodeStatusInput: $("nodeStatusInput"), nodeTagsInput: $("nodeTagsInput"),
     nodeNoteInput: $("nodeNoteInput"), nodeFormError: $("nodeFormError"), deleteNodeButton: $("deleteNodeButton"),
     closeNodeDialogButton: $("closeNodeDialogButton"), cancelNodeButton: $("cancelNodeButton"),
-    graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
+    graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphCanvas: $("graphCanvas"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
     graphSelectionLabel: $("graphSelectionLabel"), graphJumpButton: $("graphJumpButton"), graphZoomOutButton: $("graphZoomOutButton"),
     graphZoomInButton: $("graphZoomInButton"), graphZoomLabel: $("graphZoomLabel"), graphFitButton: $("graphFitButton"), closeGraphButton: $("closeGraphButton"),
     toast: $("toast"), toastMessage: $("toastMessage"), toastAction: $("toastAction")
@@ -759,7 +759,7 @@
     const nodes = sortedNodes();
     els.graphSvg.replaceChildren();
     els.graphEmpty.hidden = nodes.length > 0;
-    els.graphSvg.hidden = nodes.length === 0;
+    els.graphCanvas.hidden = nodes.length === 0;
     const selected = selectedNode();
     const selectedBookPage = selected ? resolveNodeBookPage(selected) : null;
     els.graphSelectionLabel.textContent = selected ? `已选中：${nodeLabel(selected)}${selectedBookPage ? ` · 书中第 ${selectedBookPage} 页` : ""}` : "尚未选中节点";
@@ -771,9 +771,13 @@
     if (!nodes.length) return;
 
     const layout = graphLayout(nodes);
+    const scaledWidth = Math.max(1, Math.round(layout.width * graphScale));
+    const scaledHeight = Math.max(1, Math.round(layout.height * graphScale));
     els.graphSvg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
-    els.graphSvg.style.width = `${Math.round(layout.width * graphScale)}px`;
-    els.graphSvg.style.height = `${Math.round(layout.height * graphScale)}px`;
+    els.graphSvg.setAttribute("width", String(scaledWidth));
+    els.graphSvg.setAttribute("height", String(scaledHeight));
+    els.graphSvg.style.width = `${scaledWidth}px`;
+    els.graphSvg.style.height = `${scaledHeight}px`;
 
     const defs = svgElement("defs");
     const marker = svgElement("marker", { id: "graphArrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
@@ -871,8 +875,16 @@
   }
 
   function changeGraphZoom(delta) {
+    const previousScale = graphScale;
+    const centerX = els.graphViewport.scrollLeft + els.graphViewport.clientWidth / 2;
+    const centerY = els.graphViewport.scrollTop + els.graphViewport.clientHeight / 2;
     graphScale = Math.min(GRAPH_MAX_SCALE, Math.max(GRAPH_MIN_SCALE, Math.round((graphScale + delta) * 100) / 100));
     renderGraph();
+    const ratio = graphScale / previousScale;
+    els.graphViewport.scrollTo({
+      left: Math.max(0, centerX * ratio - els.graphViewport.clientWidth / 2),
+      top: Math.max(0, centerY * ratio - els.graphViewport.clientHeight / 2)
+    });
   }
 
   function renderHistory() {
