@@ -48,14 +48,14 @@
           <button id="backButton" class="icon-button" type="button" aria-label="回溯到上一个阅读位置" title="回溯到上一个阅读位置">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m10 7-5 5 5 5M5 12h10a4 4 0 0 1 4 4v1"/></svg>
           </button>
-          <button id="previousPageButton" class="icon-button" type="button" aria-label="上一 PDF 页" title="上一 PDF 页">
+          <button id="previousPageButton" class="icon-button" type="button" aria-label="上一阅读页" title="上一阅读页">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <div class="page-readout" aria-live="polite">
-            <span>PDF 页</span>
+            <span>阅读页</span>
             <strong><span id="currentPdfPage">1</span><small> / <span id="totalPdfPages">—</span></small></strong>
           </div>
-          <button id="nextPageButton" class="icon-button" type="button" aria-label="下一 PDF 页" title="下一 PDF 页">
+          <button id="nextPageButton" class="icon-button" type="button" aria-label="下一阅读页" title="下一阅读页">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
           </button>
         </div>
@@ -93,7 +93,7 @@
           <label class="button button-primary" for="pdfInput">选择 PDF</label>
         </div>
         <div id="pdfViewport" class="pdf-viewport" hidden>
-          <canvas id="pdfCanvas" aria-label="当前 PDF 页面"></canvas>
+          <canvas id="pdfCanvas" aria-label="当前书籍页面"></canvas>
         </div>
         <div id="pdfLoading" class="pdf-loading" role="status" aria-live="polite" hidden>
           <span class="spinner" aria-hidden="true"></span>
@@ -106,7 +106,7 @@
       <section class="settings-strip">
         <div>
           <label for="offsetInput">页码偏移</label>
-          <p>PDF 页 = 书中页 + 偏移</p>
+          <p>阅读页 = 书中页 + 偏移</p>
         </div>
         <input id="offsetInput" type="number" value="0" inputmode="numeric">
       </section>
@@ -227,7 +227,7 @@
           <input id="bookPageInput" type="number" min="1" inputmode="numeric" placeholder="例如 42">
         </label>
         <label>
-          PDF 页码
+          固定阅读页
           <input id="nodePdfPageInput" type="number" min="1" inputmode="numeric" placeholder="留空则自动计算">
           <small>留空时使用“书中页码 + 偏移”</small>
         </label>

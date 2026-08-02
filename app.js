@@ -31,6 +31,8 @@
   let pdfLoadingTask = null;
   let pdfRenderTask = null;
   let pdfRenderToken = 0;
+  let readablePdfPages = [];
+  let readablePdfPageIndexes = new Map();
   let zoomFactor = 1;
   let resizeTimer = null;
   let toastTimer = null;
@@ -153,17 +155,172 @@
   function currentNode() { return state.currentNodeId ? state.nodes[state.currentNodeId] || null : null; }
   function selectedNode() { return state.selectedNodeId ? state.nodes[state.selectedNodeId] || null : null; }
   function nodeLabel(node) { return node.title ? `${node.id} · ${node.title}` : `节点 ${node.id}`; }
-  function resolveNodePage(node) {
-    if (node.pdfPage) return node.pdfPage;
-    if (node.bookPage) return Math.max(1, node.bookPage + state.offset);
+  function resolveNodeBookPage(node) {
+    if (node.bookPage) return node.bookPage;
     const numericId = Number(node.id);
-    return Number.isInteger(numericId) && numericId > 0 ? Math.max(1, numericId + state.offset) : 1;
+    return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+  }
+  function readingPageCount() {
+    return readablePdfPages.length || pdfDocument?.numPages || 0;
+  }
+  function physicalPageForReadingPage(page) {
+    const readingPage = positiveInteger(page, 0);
+    if (!readingPage) return 0;
+    if (!readablePdfPages.length) return readingPage;
+    return readablePdfPages[readingPage - 1] || 0;
+  }
+  function readingPageForPhysicalPage(page) {
+    const physicalPage = positiveInteger(page, 0);
+    if (!physicalPage) return 0;
+    if (!readablePdfPages.length) return physicalPage;
+    if (readablePdfPageIndexes.has(physicalPage)) return readablePdfPageIndexes.get(physicalPage);
+    const nextIndex = readablePdfPages.findIndex((candidate) => candidate > physicalPage);
+    return nextIndex === -1 ? readablePdfPages.length : nextIndex + 1;
+  }
+  function normalizePhysicalPage(page) {
+    const physicalPage = positiveInteger(page, 0);
+    if (!physicalPage || !readablePdfPages.length) return physicalPage;
+    if (readablePdfPageIndexes.has(physicalPage)) return physicalPage;
+    return readablePdfPages.find((candidate) => candidate > physicalPage) || readablePdfPages.at(-1) || 0;
+  }
+  function physicalPageForBookPage(page) {
+    const bookPage = positiveInteger(page, 0);
+    if (!bookPage) return 0;
+    return physicalPageForReadingPage(Math.max(1, bookPage + state.offset));
+  }
+  function resolveNodePage(node) {
+    if (node.pdfPage) return normalizePhysicalPage(node.pdfPage);
+    return physicalPageForBookPage(resolveNodeBookPage(node)) || 1;
+  }
+
+  function median(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  function createPdfImageInspector(data) {
+    const source = new TextDecoder("windows-1252").decode(data);
+    const offsets = new Map();
+    const objectPattern = /(?:^|[\r\n])(\d+)\s+(\d+)\s+obj\s*<</g;
+    for (const match of source.matchAll(objectPattern)) offsets.set(Number(match[1]), match.index + match[0].indexOf(match[1]));
+
+    const balancedDictionary = (start) => {
+      if (start < 0) return "";
+      let depth = 0;
+      for (let index = start; index < source.length - 1; index += 1) {
+        const pair = source.slice(index, index + 2);
+        if (pair === "<<") { depth += 1; index += 1; continue; }
+        if (pair === ">>") {
+          depth -= 1;
+          index += 1;
+          if (depth === 0) return source.slice(start, index + 1);
+        }
+      }
+      return "";
+    };
+    const objectDictionary = (objectNumber) => {
+      const offset = offsets.get(Number(objectNumber));
+      if (offset == null) return "";
+      return balancedDictionary(source.indexOf("<<", offset));
+    };
+    const namedDictionary = (dictionary, name) => {
+      const reference = dictionary.match(new RegExp(`/${name}\\s+(\\d+)\\s+\\d+\\s+R`));
+      if (reference) return objectDictionary(reference[1]);
+      const tokenIndex = dictionary.indexOf(`/${name}`);
+      if (tokenIndex < 0) return "";
+      const nestedStart = dictionary.indexOf("<<", tokenIndex);
+      if (nestedStart < 0) return "";
+      let depth = 0;
+      for (let index = nestedStart; index < dictionary.length - 1; index += 1) {
+        const pair = dictionary.slice(index, index + 2);
+        if (pair === "<<") { depth += 1; index += 1; continue; }
+        if (pair === ">>") {
+          depth -= 1;
+          index += 1;
+          if (depth === 0) return dictionary.slice(nestedStart, index + 1);
+        }
+      }
+      return "";
+    };
+
+    return (pageReference) => {
+      const pageDictionary = objectDictionary(pageReference);
+      const resources = namedDictionary(pageDictionary, "Resources");
+      const xObjects = namedDictionary(resources, "XObject");
+      if (!xObjects) return [];
+      const images = [];
+      for (const match of xObjects.matchAll(/\/[A-Za-z0-9_.-]+\s+(\d+)\s+\d+\s+R/g)) {
+        const imageDictionary = objectDictionary(match[1]);
+        if (!/\/Subtype\s*\/Image\b/.test(imageDictionary)) continue;
+        const width = Number(imageDictionary.match(/\/Width\s+(\d+)/)?.[1]);
+        const height = Number(imageDictionary.match(/\/Height\s+(\d+)/)?.[1]);
+        if (width > 0 && height > 0) images.push({ width, height });
+      }
+      return images;
+    };
+  }
+
+  async function buildReadablePageMap(document, inspectPageImages) {
+    const dimensions = [];
+    const batchSize = 24;
+    for (let start = 1; start <= document.numPages; start += batchSize) {
+      const numbers = Array.from({ length: Math.min(batchSize, document.numPages - start + 1) }, (_, index) => start + index);
+      const pages = await Promise.all(numbers.map((pageNumber) => document.getPage(pageNumber)));
+      pages.forEach((page, index) => {
+        const viewport = page.getViewport({ scale: 1 });
+        dimensions.push({ page: numbers[index], width: viewport.width, height: viewport.height, reference: page.ref?.num });
+        page.cleanup();
+      });
+    }
+    const medianWidth = median(dimensions.map((item) => item.width));
+    const medianHeight = median(dimensions.map((item) => item.height));
+    const dimensionByPage = new Map(dimensions.map((item) => [item.page, item]));
+    const fragmentSeeds = dimensions
+      .filter((item) => item.width >= medianWidth * 0.8 && item.width <= medianWidth * 1.2 && item.height < medianHeight * 0.78)
+      .map((item) => item.page);
+    const removedPages = new Set();
+    for (const seed of fragmentSeeds) {
+      if (removedPages.has(seed)) continue;
+      const start = Math.max(1, seed - 1);
+      const referenceImages = inspectPageImages(dimensionByPage.get(start)?.reference);
+      const referenceArea = Math.max(0, ...referenceImages.map((image) => image.width * image.height));
+      let completePage = 0;
+      const searchEnd = Math.min(document.numPages, seed + 24);
+      for (let candidate = seed + 1; candidate <= searchEnd; candidate += 1) {
+        const box = dimensionByPage.get(candidate);
+        const hasTypicalPageBox = box &&
+          box.width >= medianWidth * 0.8 && box.width <= medianWidth * 1.2 &&
+          box.height >= medianHeight * 0.78 && box.height <= medianHeight * 1.22;
+        if (!hasTypicalPageBox) continue;
+        const pageRatio = box.width / box.height;
+        const images = inspectPageImages(box.reference);
+        const hasFullPageImage = images.some((image) => {
+          const aspectMatches = Math.abs((image.width / image.height) / pageRatio - 1) < 0.15;
+          const resolutionMatches = !referenceArea || image.width * image.height >= referenceArea * 0.45;
+          return aspectMatches && resolutionMatches;
+        });
+        if (hasFullPageImage) {
+          completePage = candidate;
+          break;
+        }
+      }
+      if (completePage) {
+        for (let page = start; page < completePage; page += 1) removedPages.add(page);
+      } else {
+        removedPages.add(seed);
+      }
+    }
+    readablePdfPages = dimensions.filter((item) => !removedPages.has(item.page)).map((item) => item.page);
+    if (!readablePdfPages.length) readablePdfPages = dimensions.map((item) => item.page);
+    readablePdfPageIndexes = new Map(readablePdfPages.map((page, index) => [page, index + 1]));
   }
 
   function pushCurrentToHistory() {
     const node = currentNode();
     const latest = state.history[state.history.length - 1];
-    const entry = { nodeId: state.currentNodeId, pdfPage: state.currentPdfPage, label: node ? nodeLabel(node) : `PDF 第 ${state.currentPdfPage} 页` };
+    const readingPage = readingPageForPhysicalPage(state.currentPdfPage);
+    const entry = { nodeId: state.currentNodeId, pdfPage: state.currentPdfPage, label: node ? nodeLabel(node) : `阅读页 ${readingPage}` };
     if (!latest || latest.nodeId !== entry.nodeId || latest.pdfPage !== entry.pdfPage) {
       state.history.push(entry);
       state.history = state.history.slice(-100);
@@ -171,15 +328,16 @@
   }
 
   function navigateToPage(page, options = {}) {
-    const targetPage = positiveInteger(page, 0);
-    if (!targetPage) {
+    const requestedPage = positiveInteger(page, 0);
+    if (!requestedPage) {
       showToast("页码必须是大于 0 的整数");
       return;
     }
-    if (pdfDocument && targetPage > pdfDocument.numPages) {
-      showToast(`这份 PDF 只有 ${pdfDocument.numPages} 页`);
+    if (pdfDocument && requestedPage > pdfDocument.numPages) {
+      showToast(`这本书只有 ${readingPageCount()} 个可读页面`);
       return;
     }
+    const targetPage = normalizePhysicalPage(requestedPage);
     if (options.record !== false && targetPage !== state.currentPdfPage) pushCurrentToHistory();
     state.currentPdfPage = targetPage;
     state.currentNodeId = options.nodeId == null ? null : String(options.nodeId);
@@ -187,6 +345,20 @@
     saveState();
     updatePdfFrame();
     render();
+  }
+
+  function navigateToReadingPage(page, options = {}) {
+    const physicalPage = physicalPageForReadingPage(page);
+    if (!physicalPage) {
+      showToast(`这本书只有 ${readingPageCount()} 个可读页面`);
+      return;
+    }
+    navigateToPage(physicalPage, options);
+  }
+
+  function navigateByPage(delta) {
+    const current = readingPageForPhysicalPage(state.currentPdfPage);
+    navigateToReadingPage(current + delta);
   }
 
   function navigateToNode(id, options = {}) {
@@ -209,7 +381,7 @@
   }
 
   function updatePdfFrame() {
-    els.currentPdfPage.textContent = String(state.currentPdfPage);
+    els.currentPdfPage.textContent = String(readingPageForPhysicalPage(state.currentPdfPage) || 1);
     if (pdfDocument) renderPdfPage();
   }
 
@@ -247,7 +419,7 @@
       pdfRenderTask.cancel();
       pdfRenderTask = null;
     }
-    showPdfLoading(`正在显示第 ${pageNumber} 页…`);
+    showPdfLoading(`正在显示阅读页 ${readingPageForPhysicalPage(pageNumber)}…`);
     try {
       const page = await pdfDocument.getPage(pageNumber);
       if (token !== pdfRenderToken) return;
@@ -263,7 +435,7 @@
       canvas.height = Math.max(1, Math.floor(viewport.height * outputScale));
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
-      canvas.setAttribute("aria-label", `PDF 第 ${pageNumber} 页，共 ${pdfDocument.numPages} 页`);
+      canvas.setAttribute("aria-label", `书籍阅读页 ${readingPageForPhysicalPage(pageNumber)}，共 ${readingPageCount()} 页`);
       pdfRenderTask = page.render({
         canvasContext: context,
         viewport,
@@ -298,6 +470,7 @@
       if (pdfLoadingTask) await pdfLoadingTask.destroy();
       if (pdfDocument) await pdfDocument.destroy();
       const data = new Uint8Array(await file.arrayBuffer());
+      const inspectPageImages = createPdfImageInspector(data);
       const isLocalFile = location.protocol === "file:";
       pdfLoadingTask = window.pdfjsLib.getDocument({
         data,
@@ -308,14 +481,16 @@
       });
       pdfDocument = await pdfLoadingTask.promise;
       pdfLoadingTask = null;
+      showPdfLoading("正在整理页面…");
+      await buildReadablePageMap(pdfDocument, inspectPageImages);
       const hadSavedBookmarks = Boolean(library[file.name]);
       state = hadSavedBookmarks ? normalizeState(library[file.name]) : defaultState();
       state.pdfName = file.name;
-      state.currentPdfPage = Math.min(state.currentPdfPage, pdfDocument.numPages);
+      state.currentPdfPage = normalizePhysicalPage(Math.min(state.currentPdfPage, pdfDocument.numPages));
       saveState();
       els.pdfEmpty.hidden = true;
       els.pdfViewport.hidden = false;
-      els.totalPdfPages.textContent = String(pdfDocument.numPages);
+      els.totalPdfPages.textContent = String(readingPageCount());
       zoomFactor = 1;
       updateZoomControls();
       render();
@@ -323,11 +498,13 @@
       const bookmarkMessage = hadSavedBookmarks
         ? `已自动加载 ${Object.keys(state.nodes).length} 个同名书签`
         : "已为这份 PDF 创建同名书签数据";
-      showToast(`${bookmarkMessage} · 共 ${pdfDocument.numPages} 页`);
+      showToast(`${bookmarkMessage} · 共 ${readingPageCount()} 个可读页面`);
     } catch (error) {
       console.error(error);
       pdfDocument = null;
       pdfLoadingTask = null;
+      readablePdfPages = [];
+      readablePdfPageIndexes = new Map();
       els.pdfViewport.hidden = true;
       els.pdfEmpty.hidden = false;
       els.totalPdfPages.textContent = "—";
@@ -366,10 +543,11 @@
     renderLayout();
     updateZoomControls();
     els.offsetInput.value = String(state.offset);
-    els.currentPdfPage.textContent = String(state.currentPdfPage);
+    const currentReadingPage = readingPageForPhysicalPage(state.currentPdfPage) || 1;
+    els.currentPdfPage.textContent = String(currentReadingPage);
     els.backButton.disabled = state.history.length === 0;
-    els.previousPageButton.disabled = !pdfDocument || state.currentPdfPage <= 1;
-    els.nextPageButton.disabled = !pdfDocument || state.currentPdfPage >= pdfDocument.numPages;
+    els.previousPageButton.disabled = !pdfDocument || currentReadingPage <= 1;
+    els.nextPageButton.disabled = !pdfDocument || currentReadingPage >= readingPageCount();
   }
 
   function renderHeader() {
@@ -403,10 +581,11 @@
     els.currentNodeTitle.textContent = node.title || `节点 ${node.id}`;
     els.currentNodeStatus.textContent = STATUS_LABELS[node.status];
     els.currentNodeStatus.dataset.status = node.status;
-    const bookText = node.bookPage ? `书中第 ${node.bookPage} 页` : "未设置书中页码";
+    const resolvedBookPage = resolveNodeBookPage(node);
+    const bookText = resolvedBookPage ? `书中第 ${resolvedBookPage} 页` : "未设置书中页码";
     const pageSource = node.pdfPage ? "固定" : "偏移计算";
     const readingText = node.id === state.currentNodeId ? " · 正在阅读" : "";
-    els.currentNodeMeta.textContent = `编号 ${node.id} · ${bookText} · PDF 第 ${resolveNodePage(node)} 页（${pageSource}）${readingText}`;
+    els.currentNodeMeta.textContent = `${bookText} · 编号 ${node.id} · 阅读页 ${readingPageForPhysicalPage(resolveNodePage(node))}（${pageSource}）${readingText}`;
     els.jumpSelectedNodeButton.disabled = !pdfDocument || (node.id === state.currentNodeId && resolveNodePage(node) === state.currentPdfPage);
     els.currentNodeTags.textContent = node.tags ? node.tags.split(",").map((tag) => `#${tag.trim()}`).filter((tag) => tag !== "#").join("  ") : "";
     els.currentNodeNote.textContent = node.note;
@@ -432,7 +611,8 @@
       const label = document.createElement("strong");
       label.textContent = choice.label;
       const meta = document.createElement("span");
-      meta.textContent = target ? `前往 ${nodeLabel(target)} · PDF ${resolveNodePage(target)}` : `目标节点 ${choice.targetNodeId} 已不存在`;
+      const targetBookPage = target ? resolveNodeBookPage(target) : null;
+      meta.textContent = target ? `前往 ${nodeLabel(target)}${targetBookPage ? ` · 书中第 ${targetBookPage} 页` : ""}` : `目标节点 ${choice.targetNodeId} 已不存在`;
       jump.append(label, meta);
       jump.addEventListener("click", () => navigateToNode(choice.targetNodeId));
       const edit = document.createElement("button");
@@ -497,14 +677,16 @@
       copy.append(title, detail);
       const page = document.createElement("span");
       page.className = "node-page";
-      page.textContent = `PDF ${resolveNodePage(node)}`;
+      const bookPage = resolveNodeBookPage(node);
+      page.textContent = bookPage ? `书 ${bookPage}` : "书页 —";
+      page.title = `阅读页 ${readingPageForPhysicalPage(resolveNodePage(node))}`;
       item.append(number, copy, page);
       item.addEventListener("click", () => selectNode(node.id));
       const jump = document.createElement("button");
       jump.type = "button";
       jump.className = "node-jump-button";
       jump.textContent = "跳转";
-      jump.setAttribute("aria-label", `跳转到${nodeLabel(node)}，PDF 第 ${resolveNodePage(node)} 页`);
+      jump.setAttribute("aria-label", `跳转到${nodeLabel(node)}${bookPage ? `，书中第 ${bookPage} 页` : ""}`);
       jump.disabled = !pdfDocument;
       jump.addEventListener("click", () => navigateToNode(node.id));
       row.append(item, jump);
@@ -550,7 +732,7 @@
     const positions = new Map();
     const nodeWidth = 176;
     const nodeHeight = 66;
-    const horizontalGap = 92;
+    const horizontalGap = 136;
     const verticalGap = 34;
     const margin = 52;
     let maxRows = 1;
@@ -575,7 +757,8 @@
     els.graphEmpty.hidden = nodes.length > 0;
     els.graphSvg.hidden = nodes.length === 0;
     const selected = selectedNode();
-    els.graphSelectionLabel.textContent = selected ? `已选中：${nodeLabel(selected)} · PDF ${resolveNodePage(selected)}` : "尚未选中节点";
+    const selectedBookPage = selected ? resolveNodeBookPage(selected) : null;
+    els.graphSelectionLabel.textContent = selected ? `已选中：${nodeLabel(selected)}${selectedBookPage ? ` · 书中第 ${selectedBookPage} 页` : ""}` : "尚未选中节点";
     els.graphJumpButton.disabled = !selected || !pdfDocument;
     if (!nodes.length) return;
 
@@ -591,6 +774,7 @@
     els.graphSvg.append(defs);
 
     const edges = svgElement("g", { class: "graph-edges" });
+    const edgeLabels = svgElement("g", { class: "graph-edge-labels" });
     for (const source of nodes) {
       const start = layout.positions.get(source.id);
       for (const choice of source.choices) {
@@ -610,9 +794,24 @@
         title.textContent = `${nodeLabel(source)} — ${choice.label} → ${nodeLabel(target)}`;
         path.append(title);
         edges.append(path);
+        const displayLabel = choice.label.length > 14 ? `${choice.label.slice(0, 13)}…` : choice.label;
+        const labelWidth = Math.min(118, Math.max(38, Array.from(displayLabel).length * 7.2 + 16));
+        const labelGroup = svgElement("g", {
+          class: "graph-edge-label",
+          transform: `translate(${(x1 + x2) / 2} ${(y1 + y2) / 2})`
+        });
+        const labelTitle = svgElement("title");
+        labelTitle.textContent = choice.label;
+        labelGroup.append(
+          svgElement("rect", { x: -labelWidth / 2, y: -11, width: labelWidth, height: 22, rx: 8 }),
+          svgElement("text", { x: 0, y: 4, "text-anchor": "middle" }),
+          labelTitle
+        );
+        labelGroup.querySelector("text").textContent = displayLabel;
+        edgeLabels.append(labelGroup);
       }
     }
-    els.graphSvg.append(edges);
+    els.graphSvg.append(edges, edgeLabels);
 
     const nodeGroup = svgElement("g", { class: "graph-nodes" });
     for (const node of nodes) {
@@ -622,7 +821,7 @@
       if (node.id === state.currentNodeId) classes.push("current");
       const group = svgElement("g", {
         class: classes.join(" "), transform: `translate(${position.x} ${position.y})`,
-        role: "button", tabindex: 0, "aria-label": `选择${nodeLabel(node)}，PDF 第 ${resolveNodePage(node)} 页`
+        role: "button", tabindex: 0, "aria-label": `选择${nodeLabel(node)}${resolveNodeBookPage(node) ? `，书中第 ${resolveNodeBookPage(node)} 页` : ""}`
       });
       group.append(svgElement("rect", { width: layout.nodeWidth, height: layout.nodeHeight, rx: 13 }));
       const idText = svgElement("text", { x: 14, y: 25, class: "graph-node-id" });
@@ -631,7 +830,8 @@
       const rawTitle = node.title || `节点 ${node.id}`;
       titleText.textContent = rawTitle.length > 18 ? `${rawTitle.slice(0, 17)}…` : rawTitle;
       const pageText = svgElement("text", { x: layout.nodeWidth - 13, y: 25, class: "graph-node-page", "text-anchor": "end" });
-      pageText.textContent = `PDF ${resolveNodePage(node)}`;
+      const graphBookPage = resolveNodeBookPage(node);
+      pageText.textContent = graphBookPage ? `书 ${graphBookPage}` : "书页 —";
       group.append(idText, titleText, pageText);
       group.addEventListener("click", () => selectNode(node.id));
       group.addEventListener("keydown", (event) => {
@@ -687,7 +887,7 @@
       const label = document.createElement("strong");
       label.textContent = entry.label;
       const page = document.createElement("span");
-      page.textContent = `PDF ${entry.pdfPage}`;
+      page.textContent = `阅读页 ${readingPageForPhysicalPage(entry.pdfPage)}`;
       item.append(label, page);
       item.addEventListener("click", () => {
         const sourceIndex = state.history.length - 1 - reversedIndex;
@@ -710,12 +910,12 @@
       els.nodeIdInput.value = node.id;
       els.nodeTitleInput.value = node.title;
       els.bookPageInput.value = node.bookPage || "";
-      els.nodePdfPageInput.value = node.pdfPage || "";
+      els.nodePdfPageInput.value = node.pdfPage ? readingPageForPhysicalPage(node.pdfPage) : "";
       els.nodeStatusInput.value = node.status;
       els.nodeTagsInput.value = node.tags;
       els.nodeNoteInput.value = node.note;
     } else {
-      const suggestedBookPage = state.currentPdfPage - state.offset;
+      const suggestedBookPage = readingPageForPhysicalPage(state.currentPdfPage) - state.offset;
       const suggestedValue = suggestedBookPage > 0 ? String(suggestedBookPage) : "";
       els.nodeIdInput.value = suggestedValue;
       els.bookPageInput.value = suggestedValue;
@@ -739,9 +939,10 @@
       return;
     }
     const bookPage = optionalPositiveInteger(els.bookPageInput.value) || (/^\d+$/.test(id) ? positiveInteger(id, null) : null);
-    const pdfPage = optionalPositiveInteger(els.nodePdfPageInput.value);
+    const fixedReadingPage = optionalPositiveInteger(els.nodePdfPageInput.value);
+    const pdfPage = fixedReadingPage ? physicalPageForReadingPage(fixedReadingPage) : null;
     if (!bookPage && !pdfPage) {
-      els.nodeFormError.textContent = "非数字节点需要填写书中页码或 PDF 页码。";
+      els.nodeFormError.textContent = "非数字节点需要填写书中页码或固定阅读页。";
       els.bookPageInput.focus();
       return;
     }
@@ -814,7 +1015,8 @@
     els.choiceTarget.replaceChildren(...options.map((item) => {
       const option = document.createElement("option");
       option.value = item.id;
-      option.textContent = `${nodeLabel(item)} · PDF ${resolveNodePage(item)}`;
+      const bookPage = resolveNodeBookPage(item);
+      option.textContent = `${nodeLabel(item)}${bookPage ? ` · 书中第 ${bookPage} 页` : ` · 阅读页 ${readingPageForPhysicalPage(resolveNodePage(item))}`}`;
       return option;
     }));
     editingChoiceId = choice?.id || null;
@@ -854,7 +1056,9 @@
       navigateToNode(value);
     } else if (/^\d+$/.test(value)) {
       const bookPage = Number(value);
-      navigateToPage(Math.max(1, bookPage + state.offset));
+      const physicalPage = physicalPageForBookPage(bookPage);
+      if (physicalPage) navigateToPage(physicalPage);
+      else showToast(`这本书没有书中第 ${bookPage} 页`);
     } else {
       showToast("找不到该节点；直接跳页时请输入数字");
     }
@@ -889,7 +1093,7 @@
       const activePdfName = pdfDocument ? state.pdfName : imported.pdfName;
       state = imported;
       state.pdfName = activePdfName;
-      if (pdfDocument) state.currentPdfPage = Math.min(state.currentPdfPage, pdfDocument.numPages);
+      if (pdfDocument) state.currentPdfPage = normalizePhysicalPage(Math.min(state.currentPdfPage, pdfDocument.numPages));
       saveState();
       updatePdfFrame();
       render();
@@ -940,8 +1144,8 @@
   els.pdfInput.addEventListener("change", () => handlePdfFile(els.pdfInput.files[0]));
   els.importInput.addEventListener("change", () => importData(els.importInput.files[0]));
   els.jumpForm.addEventListener("submit", handleJump);
-  els.previousPageButton.addEventListener("click", () => navigateToPage(Math.max(1, state.currentPdfPage - 1)));
-  els.nextPageButton.addEventListener("click", () => navigateToPage(state.currentPdfPage + 1));
+  els.previousPageButton.addEventListener("click", () => navigateByPage(-1));
+  els.nextPageButton.addEventListener("click", () => navigateByPage(1));
   els.backButton.addEventListener("click", goBack);
   els.zoomOutButton.addEventListener("click", () => changeZoom(-0.25));
   els.zoomInButton.addEventListener("click", () => changeZoom(0.25));
@@ -1031,11 +1235,11 @@
     ) return;
     if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (state.currentPdfPage > 1) navigateToPage(state.currentPdfPage - 1);
+      if (readingPageForPhysicalPage(state.currentPdfPage) > 1) navigateByPage(-1);
     }
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
       event.preventDefault();
-      if (state.currentPdfPage < pdfDocument.numPages) navigateToPage(state.currentPdfPage + 1);
+      if (readingPageForPhysicalPage(state.currentPdfPage) < readingPageCount()) navigateByPage(1);
     }
   });
 

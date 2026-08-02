@@ -507,6 +507,9 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-svg { display: block; max-width: none; min-width: 100%; min-height: 100%; }
 .graph-edge { fill: none; stroke: #9a9387; stroke-width: 2; opacity: .82; }
 .graph-arrow { fill: #777166; stroke: none; }
+.graph-edge-label { pointer-events: none; }
+.graph-edge-label rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1; }
+.graph-edge-label text { fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; font-size: 11px; font-weight: 500; }
 .graph-node { cursor: pointer; outline: none; }
 .graph-node rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(38 35 31 / 12%)); }
 .graph-node:hover rect, .graph-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
