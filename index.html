@@ -158,7 +158,10 @@
           <form id="choiceForm" class="choice-form" hidden>
             <label for="choiceLabel">选项文字</label>
             <input id="choiceLabel" placeholder="例如：进入山洞" required>
-            <label for="choiceTarget">目标节点</label>
+            <label for="choiceTargetSearch">搜索目标节点</label>
+            <input id="choiceTargetSearch" type="search" autocomplete="off" placeholder="输入编号、名称、标签或书中页码" aria-describedby="choiceTargetHint">
+            <p id="choiceTargetHint" class="choice-target-hint" role="status" aria-live="polite"></p>
+            <label for="choiceTarget">匹配的目标节点</label>
             <select id="choiceTarget" required></select>
             <div class="form-actions">
               <button id="cancelChoiceButton" class="button button-quiet" type="button">取消</button>
@@ -271,7 +274,8 @@
           <button id="graphZoomOutButton" class="icon-button" type="button" aria-label="缩小关系图" title="缩小关系图">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 12h10"/></svg>
           </button>
-          <button id="graphFitButton" class="button button-quiet compact-button" type="button">适合</button>
+          <span id="graphZoomLabel" class="graph-zoom-label" aria-live="polite">100%</span>
+          <button id="graphFitButton" class="button button-quiet compact-button" type="button" aria-label="显示全部关系图" title="缩放到完整显示全部节点">显示全部</button>
           <button id="graphZoomInButton" class="icon-button" type="button" aria-label="放大关系图" title="放大关系图">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7v10M7 12h10"/></svg>
           </button>

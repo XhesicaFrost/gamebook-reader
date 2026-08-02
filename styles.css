@@ -417,6 +417,8 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
 .choice-form { margin-top: 10px; padding: 12px; background: var(--bg); border-radius: 10px; }
 .choice-form label { display: block; margin: 8px 0 4px; font-size: 12px; font-weight: 750; }
 .choice-form label:first-child { margin-top: 0; }
+.choice-target-hint { min-height: 17px; margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.choice-target-hint[data-empty="true"] { color: var(--danger); }
 .choice-form .form-actions { justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 .node-browser { padding: 11px; }
@@ -495,6 +497,7 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-header { border-bottom: 1px solid var(--line); }
 .graph-header h2 { margin: 2px 0 0; font-family: ui-serif, Georgia, "Songti SC", serif; font-size: 21px; font-weight: 500; }
 .graph-controls { display: flex; align-items: center; gap: 4px; }
+.graph-zoom-label { min-width: 44px; color: var(--muted); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .graph-viewport {
   position: relative;
   min-height: 0;
@@ -509,7 +512,7 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-arrow { fill: #777166; stroke: none; }
 .graph-edge-label { pointer-events: none; }
 .graph-edge-label rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1; }
-.graph-edge-label text { fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; font-size: 11px; font-weight: 500; }
+.graph-edge-label text { fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; font-size: 12px; font-weight: 400; }
 .graph-node { cursor: pointer; outline: none; }
 .graph-node rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(38 35 31 / 12%)); }
 .graph-node:hover rect, .graph-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
@@ -521,7 +524,7 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node.status-clue rect { fill: #e9e6f7; }
 .graph-node.status-done rect { fill: #e4eee1; }
 .graph-node text { pointer-events: none; fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; }
-.graph-node-id { font-size: 15px; font-weight: 650; }
+.graph-node-id { font-size: 15px; font-weight: 500; }
 .graph-node-title { font-size: 13px; font-weight: 400; }
 .graph-node-page { fill: var(--muted) !important; font-size: 11px; font-weight: 400; }
 .graph-footer { min-height: 62px; border-top: 1px solid var(--line); }

@@ -38,7 +38,10 @@
   let toastTimer = null;
   let undoAction = null;
   let editingChoiceId = null;
+  let choiceTargetCandidates = [];
   let graphScale = 1;
+  const GRAPH_MIN_SCALE = 0.1;
+  const GRAPH_MAX_SCALE = 2.5;
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -55,7 +58,8 @@
     currentNodeTags: $("currentNodeTags"), currentNodeNote: $("currentNodeNote"), editCurrentNodeButton: $("editCurrentNodeButton"), jumpSelectedNodeButton: $("jumpSelectedNodeButton"),
     nodeMoreButton: $("nodeMoreButton"), nodeActionMenu: $("nodeActionMenu"), deleteSelectedNodeButton: $("deleteSelectedNodeButton"),
     choiceList: $("choiceList"), choiceForm: $("choiceForm"), addChoiceButton: $("addChoiceButton"),
-    choiceLabel: $("choiceLabel"), choiceTarget: $("choiceTarget"), cancelChoiceButton: $("cancelChoiceButton"), saveChoiceButton: $("saveChoiceButton"),
+    choiceLabel: $("choiceLabel"), choiceTargetSearch: $("choiceTargetSearch"), choiceTargetHint: $("choiceTargetHint"),
+    choiceTarget: $("choiceTarget"), cancelChoiceButton: $("cancelChoiceButton"), saveChoiceButton: $("saveChoiceButton"),
     addNodeButton: $("addNodeButton"), openGraphButton: $("openGraphButton"), nodeCount: $("nodeCount"), nodeSearch: $("nodeSearch"), nodeList: $("nodeList"),
     historyCount: $("historyCount"), historyList: $("historyList"),
     nodeDialog: $("nodeDialog"), nodeForm: $("nodeForm"), nodeDialogTitle: $("nodeDialogTitle"), editingNodeId: $("editingNodeId"),
@@ -65,7 +69,7 @@
     closeNodeDialogButton: $("closeNodeDialogButton"), cancelNodeButton: $("cancelNodeButton"),
     graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
     graphSelectionLabel: $("graphSelectionLabel"), graphJumpButton: $("graphJumpButton"), graphZoomOutButton: $("graphZoomOutButton"),
-    graphZoomInButton: $("graphZoomInButton"), graphFitButton: $("graphFitButton"), closeGraphButton: $("closeGraphButton"),
+    graphZoomInButton: $("graphZoomInButton"), graphZoomLabel: $("graphZoomLabel"), graphFitButton: $("graphFitButton"), closeGraphButton: $("closeGraphButton"),
     toast: $("toast"), toastMessage: $("toastMessage"), toastAction: $("toastAction")
   };
 
@@ -760,6 +764,10 @@
     const selectedBookPage = selected ? resolveNodeBookPage(selected) : null;
     els.graphSelectionLabel.textContent = selected ? `已选中：${nodeLabel(selected)}${selectedBookPage ? ` · 书中第 ${selectedBookPage} 页` : ""}` : "尚未选中节点";
     els.graphJumpButton.disabled = !selected || !pdfDocument;
+    els.graphZoomLabel.textContent = graphScale < 0.01 ? "<1%" : `${Math.round(graphScale * 100)}%`;
+    els.graphZoomOutButton.disabled = !nodes.length || graphScale <= GRAPH_MIN_SCALE;
+    els.graphZoomInButton.disabled = !nodes.length || graphScale >= GRAPH_MAX_SCALE;
+    els.graphFitButton.disabled = !nodes.length;
     if (!nodes.length) return;
 
     const layout = graphLayout(nodes);
@@ -843,15 +851,13 @@
       nodeGroup.append(group);
     }
     els.graphSvg.append(nodeGroup);
-    els.graphZoomOutButton.disabled = graphScale <= 0.5;
-    els.graphZoomInButton.disabled = graphScale >= 2;
   }
 
   function openGraph() {
     graphScale = 1;
     renderGraph();
     els.graphDialog.showModal();
-    requestAnimationFrame(fitGraph);
+    els.graphViewport.scrollTo({ left: 0, top: 0 });
   }
 
   function fitGraph() {
@@ -859,13 +865,13 @@
     const viewBox = els.graphSvg.viewBox.baseVal;
     const availableWidth = Math.max(240, els.graphViewport.clientWidth - 36);
     const availableHeight = Math.max(180, els.graphViewport.clientHeight - 36);
-    graphScale = Math.min(1.35, Math.max(0.5, Math.min(availableWidth / viewBox.width, availableHeight / viewBox.height)));
+    graphScale = Math.min(1, availableWidth / viewBox.width, availableHeight / viewBox.height);
     renderGraph();
     els.graphViewport.scrollTo({ left: 0, top: 0 });
   }
 
   function changeGraphZoom(delta) {
-    graphScale = Math.min(2, Math.max(0.5, Math.round((graphScale + delta) * 100) / 100));
+    graphScale = Math.min(GRAPH_MAX_SCALE, Math.max(GRAPH_MIN_SCALE, Math.round((graphScale + delta) * 100) / 100));
     renderGraph();
   }
 
@@ -1005,23 +1011,46 @@
     requestDeleteNode(els.editingNodeId.value, true);
   }
 
+  function choiceTargetLabel(node) {
+    const bookPage = resolveNodeBookPage(node);
+    return `${nodeLabel(node)}${bookPage ? ` · 书中第 ${bookPage} 页` : ` · 阅读页 ${readingPageForPhysicalPage(resolveNodePage(node))}`}`;
+  }
+
+  function renderChoiceTargetOptions(preferredId = null) {
+    const query = els.choiceTargetSearch.value.trim().toLocaleLowerCase();
+    const currentId = preferredId || els.choiceTarget.value;
+    const matches = choiceTargetCandidates.filter((node) => {
+      if (!query) return true;
+      const bookPage = resolveNodeBookPage(node);
+      return [
+        node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status],
+        bookPage, bookPage ? `书中第 ${bookPage} 页` : ""
+      ].filter(Boolean).join(" ").toLocaleLowerCase().includes(query);
+    });
+    els.choiceTarget.replaceChildren(...matches.map((node) => {
+      const option = document.createElement("option");
+      option.value = node.id;
+      option.textContent = choiceTargetLabel(node);
+      return option;
+    }));
+    if (matches.some((node) => node.id === currentId)) els.choiceTarget.value = currentId;
+    els.choiceTarget.disabled = matches.length === 0;
+    els.saveChoiceButton.disabled = matches.length === 0;
+    els.choiceTargetHint.textContent = matches.length ? `找到 ${matches.length} 个目标节点` : "没有匹配的目标节点，请换个关键词";
+    els.choiceTargetHint.dataset.empty = String(matches.length === 0);
+  }
+
   function openChoiceForm(choice = null) {
     const node = selectedNode();
-    const options = sortedNodes().filter((item) => item.id !== node?.id);
-    if (!options.length) {
+    choiceTargetCandidates = sortedNodes().filter((item) => item.id !== node?.id);
+    if (!choiceTargetCandidates.length) {
       showToast("请先添加至少一个目标节点");
       return;
     }
-    els.choiceTarget.replaceChildren(...options.map((item) => {
-      const option = document.createElement("option");
-      option.value = item.id;
-      const bookPage = resolveNodeBookPage(item);
-      option.textContent = `${nodeLabel(item)}${bookPage ? ` · 书中第 ${bookPage} 页` : ` · 阅读页 ${readingPageForPhysicalPage(resolveNodePage(item))}`}`;
-      return option;
-    }));
     editingChoiceId = choice?.id || null;
     els.choiceLabel.value = choice?.label || "";
-    if (choice && state.nodes[choice.targetNodeId]) els.choiceTarget.value = choice.targetNodeId;
+    els.choiceTargetSearch.value = "";
+    renderChoiceTargetOptions(choice && state.nodes[choice.targetNodeId] ? choice.targetNodeId : null);
     els.saveChoiceButton.textContent = choice ? "更新关系" : "保存关系";
     els.choiceForm.hidden = false;
     els.choiceLabel.focus();
@@ -1044,6 +1073,8 @@
     saveState();
     editingChoiceId = null;
     els.choiceForm.reset();
+    choiceTargetCandidates = [];
+    els.choiceTargetHint.textContent = "";
     els.choiceForm.hidden = true;
     renderCurrentNode();
     showToast(existing ? "跳转关系已更新" : "跳转关系已添加");
@@ -1213,7 +1244,14 @@
   els.closeNodeDialogButton.addEventListener("click", () => els.nodeDialog.close());
   els.cancelNodeButton.addEventListener("click", () => els.nodeDialog.close());
   els.addChoiceButton.addEventListener("click", openChoiceForm);
-  els.cancelChoiceButton.addEventListener("click", () => { editingChoiceId = null; els.choiceForm.hidden = true; els.choiceForm.reset(); });
+  els.choiceTargetSearch.addEventListener("input", () => renderChoiceTargetOptions());
+  els.cancelChoiceButton.addEventListener("click", () => {
+    editingChoiceId = null;
+    choiceTargetCandidates = [];
+    els.choiceTargetHint.textContent = "";
+    els.choiceForm.hidden = true;
+    els.choiceForm.reset();
+  });
   els.choiceForm.addEventListener("submit", saveChoice);
   els.toastAction.addEventListener("click", () => {
     if (undoAction) undoAction();
