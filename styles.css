@@ -522,7 +522,14 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-arrow { fill: #777166; stroke: none; }
 .graph-edge-label { pointer-events: none; }
 .graph-edge-label rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1; }
-.graph-edge-label text { fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; font-size: 12px; font-weight: 400; }
+.graph-edge-label text {
+  fill: var(--ink);
+  stroke: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  font-synthesis: none;
+}
 .graph-node { cursor: pointer; outline: none; }
 .graph-node rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(38 35 31 / 12%)); }
 .graph-node:hover rect, .graph-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
@@ -533,8 +540,8 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node.status-important rect { fill: #f5e8c8; }
 .graph-node.status-clue rect { fill: #e9e6f7; }
 .graph-node.status-done rect { fill: #e4eee1; }
-.graph-node text { pointer-events: none; fill: var(--ink); font-family: Inter, ui-sans-serif, "PingFang SC", sans-serif; }
-.graph-node-id { font-size: 15px; font-weight: 500; }
+.graph-node text { pointer-events: none; fill: var(--ink); stroke: none; font-family: inherit; font-synthesis: none; }
+.graph-node-id { font-size: 15px; font-weight: 400; }
 .graph-node-title { font-size: 13px; font-weight: 400; }
 .graph-node-page { fill: var(--muted) !important; font-size: 11px; font-weight: 400; }
 .graph-footer { min-height: 62px; border-top: 1px solid var(--line); }
