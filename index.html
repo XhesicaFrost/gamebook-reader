@@ -177,6 +177,7 @@
             <p id="choiceTargetHint" class="choice-target-hint" role="status" aria-live="polite"></p>
             <label for="choiceTarget">匹配的目标节点</label>
             <select id="choiceTarget" required></select>
+            <p class="form-keyboard-hint"><kbd>Enter</kbd> 下一项 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 上一项 · <kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd> 保存</p>
             <div class="form-actions">
               <button id="cancelChoiceButton" class="button button-quiet" type="button">取消</button>
               <button id="saveChoiceButton" class="button button-primary" type="submit">保存关系</button>
@@ -286,6 +287,7 @@
           <textarea id="nodeNoteInput" rows="5" placeholder="记录道具、线索、战斗结果或其他想法"></textarea>
         </label>
       </div>
+      <p class="form-keyboard-hint"><kbd>Enter</kbd> 下一项 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 上一项 · <kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd> 保存；备注中 <kbd>Enter</kbd> 换行，复选框用 <kbd>Space</kbd> 切换</p>
       <p id="nodeFormError" class="form-error" role="alert"></p>
       <div class="dialog-actions">
         <button id="deleteNodeButton" class="button button-danger" type="button" hidden>删除节点</button>
@@ -368,6 +370,7 @@
             <div><dt><kbd>Shift</kbd>+<kbd>E</kbd></dt><dd>切换“结局节点”</dd></div>
             <div><dt><kbd>M</kbd></dt><dd>打开节点关系图</dd></div>
             <div><dt><kbd>Delete</kbd></dt><dd>删除选中节点（仍会二次确认）</dd></div>
+            <div><dt><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></dt><dd>表单中进入下一项 / 返回上一项</dd></div>
             <div><dt><kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd></dt><dd>保存正在编辑的节点或关系</dd></div>
           </dl>
         </section>

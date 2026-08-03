@@ -1326,6 +1326,26 @@
     return Boolean(target.closest?.("input, textarea, select, [contenteditable='true']"));
   }
 
+  function handleFormFieldNavigation(event, form) {
+    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.altKey) return;
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      form.requestSubmit();
+      return;
+    }
+    const field = event.target.closest?.("input:not([type='hidden']), textarea, select");
+    if (!field || (field.matches("textarea") && !event.shiftKey)) return;
+    const fields = Array.from(form.querySelectorAll("input:not([type='hidden']), textarea, select"))
+      .filter((item) => !item.disabled && !item.hidden);
+    const currentIndex = fields.indexOf(field);
+    if (currentIndex < 0) return;
+    const targetIndex = currentIndex + (event.shiftKey ? -1 : 1);
+    const nextField = fields[targetIndex];
+    event.preventDefault();
+    if (nextField) nextField.focus({ preventScroll: false });
+    else if (!event.shiftKey) form.requestSubmit();
+  }
+
   els.pdfInput.addEventListener("change", () => handlePdfFile(els.pdfInput.files[0]));
   els.importInput.addEventListener("change", () => importData(els.importInput.files[0]));
   els.jumpForm.addEventListener("submit", handleJump);
@@ -1421,12 +1441,7 @@
     }
   });
   els.nodeForm.addEventListener("submit", saveNodeFromForm);
-  els.nodeForm.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      event.preventDefault();
-      els.nodeForm.requestSubmit();
-    }
-  });
+  els.nodeForm.addEventListener("keydown", (event) => handleFormFieldNavigation(event, els.nodeForm));
   els.deleteNodeButton.addEventListener("click", deleteCurrentEditingNode);
   els.closeNodeDialogButton.addEventListener("click", () => els.nodeDialog.close());
   els.cancelNodeButton.addEventListener("click", () => els.nodeDialog.close());
@@ -1434,12 +1449,7 @@
   els.choiceTargetSearch.addEventListener("input", () => renderChoiceTargetOptions());
   els.cancelChoiceButton.addEventListener("click", cancelChoiceForm);
   els.choiceForm.addEventListener("submit", saveChoice);
-  els.choiceForm.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      event.preventDefault();
-      els.choiceForm.requestSubmit();
-    }
-  });
+  els.choiceForm.addEventListener("keydown", (event) => handleFormFieldNavigation(event, els.choiceForm));
   els.closeShortcutDialogButton.addEventListener("click", () => els.shortcutDialog.close());
   els.toastAction.addEventListener("click", () => {
     if (undoAction) undoAction();

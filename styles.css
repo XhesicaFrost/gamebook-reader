@@ -460,6 +460,8 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
 .choice-form label:first-child { margin-top: 0; }
 .choice-target-hint { min-height: 17px; margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .choice-target-hint[data-empty="true"] { color: var(--danger); }
+.form-keyboard-hint { margin: 9px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.form-keyboard-hint kbd { min-width: 19px; min-height: 18px; padding-inline: 4px; font-size: 10px; }
 .choice-form .form-actions { justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 .node-browser { padding: 11px; }
