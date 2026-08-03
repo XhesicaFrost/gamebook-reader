@@ -387,9 +387,9 @@
     const node = state.nodes[String(id)];
     if (!node) {
       showToast(`找不到节点 ${id}`);
-      return;
+      return false;
     }
-    navigateToPage(resolveNodePage(node), { nodeId: node.id, record: options.record });
+    return navigateToPage(resolveNodePage(node), { nodeId: node.id, record: options.record });
   }
 
   function selectNode(id) {
@@ -1162,17 +1162,23 @@
   function handleJump(event) {
     event.preventDefault();
     const value = els.jumpInput.value.trim();
+    let navigated = false;
     if (state.nodes[value]) {
-      navigateToNode(value);
+      navigated = navigateToNode(value);
     } else if (/^\d+$/.test(value)) {
       const bookPage = Number(value);
       const physicalPage = physicalPageForBookPage(bookPage);
-      if (physicalPage) navigateToPage(physicalPage);
+      if (physicalPage) navigated = navigateToPage(physicalPage);
       else showToast(`这本书没有书中第 ${bookPage} 页`);
     } else {
       showToast("找不到该节点；直接跳页时请输入数字");
     }
-    els.jumpInput.select();
+    if (navigated) {
+      els.jumpInput.blur();
+      els.pdfStage.focus({ preventScroll: true });
+    } else {
+      els.jumpInput.select();
+    }
   }
 
   function goBack() {
