@@ -40,6 +40,8 @@
   let editingChoiceId = null;
   let choiceTargetCandidates = [];
   let graphScale = 1;
+  let graphFocusedNodeId = null;
+  let graphNodePositions = new Map();
   const GRAPH_MIN_SCALE = 0.1;
   const GRAPH_MAX_SCALE = 2.5;
 
@@ -73,6 +75,7 @@
     graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphCanvas: $("graphCanvas"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
     graphSelectionLabel: $("graphSelectionLabel"), graphJumpButton: $("graphJumpButton"), graphZoomOutButton: $("graphZoomOutButton"),
     graphZoomInButton: $("graphZoomInButton"), graphZoomLabel: $("graphZoomLabel"), graphFitButton: $("graphFitButton"), closeGraphButton: $("closeGraphButton"),
+    graphNodeSearch: $("graphNodeSearch"), graphSearchHint: $("graphSearchHint"),
     shortcutDialog: $("shortcutDialog"), closeShortcutDialogButton: $("closeShortcutDialogButton"),
     toast: $("toast"), toastMessage: $("toastMessage"), toastAction: $("toastAction")
   };
@@ -678,13 +681,18 @@
     return Object.values(state.nodes).sort((a, b) => a.id.localeCompare(b.id, "zh-CN", { numeric: true }));
   }
 
+  function nodeMatchesQuery(node, query) {
+    return [
+      node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status],
+      resolveNodeBookPage(node) ? `书中第 ${resolveNodeBookPage(node)} 页 书 ${resolveNodeBookPage(node)}` : "",
+      node.ending ? "结局 结局节点" : "", node.visited ? "已走过 已访问" : ""
+    ].join(" ").toLocaleLowerCase().includes(query);
+  }
+
   function renderNodeList() {
     const nodes = sortedNodes();
     const query = els.nodeSearch.value.trim().toLocaleLowerCase();
-    const visible = query ? nodes.filter((node) => [
-      node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status],
-      node.ending ? "结局 结局节点" : "", node.visited ? "已走过 已访问" : ""
-    ].join(" ").toLocaleLowerCase().includes(query)) : nodes;
+    const visible = query ? nodes.filter((node) => nodeMatchesQuery(node, query)) : nodes;
     els.nodeCount.textContent = `${nodes.length} 个节点`;
     els.nodeList.replaceChildren();
     if (!visible.length) {
@@ -799,6 +807,8 @@
 
   function renderGraph() {
     const nodes = sortedNodes();
+    const restoreNodeFocus = els.graphDialog.open && document.activeElement?.closest?.(".graph-node") ? graphFocusedNodeId : null;
+    if (!nodes.some((node) => node.id === graphFocusedNodeId)) graphFocusedNodeId = currentNode()?.id || selectedNode()?.id || nodes[0]?.id || null;
     els.graphSvg.replaceChildren();
     els.graphEmpty.hidden = nodes.length > 0;
     els.graphCanvas.hidden = nodes.length === 0;
@@ -810,9 +820,21 @@
     els.graphZoomOutButton.disabled = !nodes.length || graphScale <= GRAPH_MIN_SCALE;
     els.graphZoomInButton.disabled = !nodes.length || graphScale >= GRAPH_MAX_SCALE;
     els.graphFitButton.disabled = !nodes.length;
-    if (!nodes.length) return;
+    if (!nodes.length) {
+      graphNodePositions = new Map();
+      els.graphSearchHint.textContent = "还没有可搜索的节点";
+      return;
+    }
 
     const layout = graphLayout(nodes);
+    graphNodePositions = new Map(nodes.map((node) => {
+      const position = layout.positions.get(node.id);
+      return [node.id, { x: position.x + layout.nodeWidth / 2, y: position.y + layout.nodeHeight / 2 }];
+    }));
+    const graphQuery = els.graphNodeSearch.value.trim().toLocaleLowerCase();
+    const graphMatches = graphQuery ? nodes.filter((node) => nodeMatchesQuery(node, graphQuery)) : nodes;
+    const graphMatchIds = new Set(graphMatches.map((node) => node.id));
+    els.graphSearchHint.textContent = graphQuery ? `${graphMatches.length} 个匹配节点` : "输入编号、名称、标签、备注或书中页码";
     const scaledWidth = Math.max(1, Math.round(layout.width * graphScale));
     const scaledHeight = Math.max(1, Math.round(layout.height * graphScale));
     els.graphSvg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
@@ -875,10 +897,12 @@
       if (node.id === state.currentNodeId) classes.push("current");
       if (node.visited) classes.push("visited");
       if (node.ending) classes.push("ending");
+      if (graphQuery && graphMatchIds.has(node.id)) classes.push("search-match");
+      if (graphQuery && !graphMatchIds.has(node.id)) classes.push("search-muted");
       const graphTraits = [node.visited ? "已走过" : "", node.ending ? "结局" : ""].filter(Boolean);
       const group = svgElement("g", {
         class: classes.join(" "), transform: `translate(${position.x} ${position.y})`,
-        role: "button", tabindex: 0,
+        role: "button", tabindex: node.id === graphFocusedNodeId ? 0 : -1, "data-node-id": node.id,
         "aria-label": `选择${nodeLabel(node)}${resolveNodeBookPage(node) ? `，书中第 ${resolveNodeBookPage(node)} 页` : ""}${graphTraits.length ? `，${graphTraits.join("，")}` : ""}`
       });
       group.append(svgElement("rect", { width: layout.nodeWidth, height: layout.nodeHeight, rx: 13 }));
@@ -896,23 +920,91 @@
         traitText.textContent = graphTraits.join(" · ");
         group.append(traitText);
       }
-      group.addEventListener("click", () => selectNode(node.id));
-      group.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          selectNode(node.id);
-        }
-      });
+      group.addEventListener("click", () => selectGraphNode(node.id));
+      group.addEventListener("keydown", (event) => handleGraphNodeKeydown(event, node.id));
       nodeGroup.append(group);
     }
     els.graphSvg.append(nodeGroup);
+    if (restoreNodeFocus) requestAnimationFrame(() => focusGraphNode(restoreNodeFocus, { center: false }));
+  }
+
+  function graphNodeElement(id) {
+    if (id == null) return null;
+    return Array.from(els.graphSvg.querySelectorAll(".graph-node")).find((element) => element.dataset.nodeId === String(id)) || null;
+  }
+
+  function focusGraphNode(id, options = {}) {
+    const element = graphNodeElement(id);
+    if (!element) return;
+    graphFocusedNodeId = String(id);
+    for (const node of els.graphSvg.querySelectorAll(".graph-node")) node.setAttribute("tabindex", node === element ? "0" : "-1");
+    element.focus({ preventScroll: true });
+    if (options.center === false) return;
+    const viewportRect = els.graphViewport.getBoundingClientRect();
+    const nodeRect = element.getBoundingClientRect();
+    els.graphViewport.scrollTo({
+      left: Math.max(0, els.graphViewport.scrollLeft + nodeRect.left + nodeRect.width / 2 - viewportRect.left - viewportRect.width / 2),
+      top: Math.max(0, els.graphViewport.scrollTop + nodeRect.top + nodeRect.height / 2 - viewportRect.top - viewportRect.height / 2),
+      behavior: options.smooth ? "smooth" : "auto"
+    });
+  }
+
+  function selectGraphNode(id, options = {}) {
+    graphFocusedNodeId = String(id);
+    selectNode(id);
+    requestAnimationFrame(() => focusGraphNode(id, options));
+  }
+
+  function graphNeighborNodeId(id, key) {
+    const origin = graphNodePositions.get(String(id));
+    if (!origin) return null;
+    const candidates = [];
+    for (const [candidateId, point] of graphNodePositions) {
+      if (candidateId === String(id)) continue;
+      const dx = point.x - origin.x;
+      const dy = point.y - origin.y;
+      const horizontal = key === "ArrowLeft" || key === "ArrowRight";
+      const primary = key === "ArrowLeft" ? -dx : key === "ArrowRight" ? dx : key === "ArrowUp" ? -dy : dy;
+      if (primary <= 0) continue;
+      const secondary = Math.abs(horizontal ? dy : dx);
+      candidates.push({ id: candidateId, score: primary + secondary * 2, primary, secondary });
+    }
+    candidates.sort((a, b) => a.score - b.score || a.secondary - b.secondary || a.primary - b.primary);
+    return candidates[0]?.id || null;
+  }
+
+  function handleGraphNodeKeydown(event, id) {
+    let targetId = null;
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) targetId = graphNeighborNodeId(id, event.key);
+    else if (event.key === "Home") targetId = sortedNodes()[0]?.id || null;
+    else if (event.key === "End") targetId = sortedNodes().at(-1)?.id || null;
+    else if (event.key === "Enter" || event.key === " ") targetId = id;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (targetId) selectGraphNode(targetId, { smooth: true });
+  }
+
+  function selectFirstGraphSearchMatch() {
+    const query = els.graphNodeSearch.value.trim().toLocaleLowerCase();
+    const match = sortedNodes().find((node) => !query || nodeMatchesQuery(node, query));
+    if (!match) {
+      showToast("关系图中没有匹配的节点");
+      return;
+    }
+    selectGraphNode(match.id, { smooth: true });
   }
 
   function openGraph() {
     graphScale = 1;
-    renderGraph();
+    els.graphNodeSearch.value = "";
+    graphFocusedNodeId = currentNode()?.id || selectedNode()?.id || sortedNodes()[0]?.id || null;
     els.graphDialog.showModal();
-    els.graphViewport.scrollTo({ left: 0, top: 0 });
+    renderGraph();
+    requestAnimationFrame(() => {
+      if (graphFocusedNodeId) focusGraphNode(graphFocusedNodeId);
+      else els.closeGraphButton.focus();
+    });
   }
 
   function fitGraph() {
@@ -1399,6 +1491,20 @@
   els.graphZoomOutButton.addEventListener("click", () => changeGraphZoom(-0.2));
   els.graphZoomInButton.addEventListener("click", () => changeGraphZoom(0.2));
   els.graphFitButton.addEventListener("click", fitGraph);
+  els.graphNodeSearch.addEventListener("input", renderGraph);
+  els.graphNodeSearch.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && els.graphNodeSearch.value) {
+      event.preventDefault();
+      event.stopPropagation();
+      els.graphNodeSearch.value = "";
+      renderGraph();
+      return;
+    }
+    if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectFirstGraphSearchMatch();
+  });
   els.graphJumpButton.addEventListener("click", () => {
     const node = selectedNode();
     if (!node) return;
@@ -1487,7 +1593,21 @@
     if (event.defaultPrevented || els.shortcutDialog.open) return;
 
     if (els.graphDialog.open) {
-      if (key === "j" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      if (textEntry) return;
+      if (event.key === "/" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        els.graphNodeSearch.focus();
+        els.graphNodeSearch.select();
+      } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        const targetId = graphNeighborNodeId(graphFocusedNodeId, event.key);
+        if (targetId) selectGraphNode(targetId, { smooth: true });
+      } else if ((event.key === "Home" || event.key === "End") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        const nodes = sortedNodes();
+        const targetId = event.key === "Home" ? nodes[0]?.id : nodes.at(-1)?.id;
+        if (targetId) selectGraphNode(targetId, { smooth: true });
+      } else if (key === "j" && !event.altKey && !event.ctrlKey && !event.metaKey) {
         const node = selectedNode();
         if (node && pdfDocument) {
           event.preventDefault();

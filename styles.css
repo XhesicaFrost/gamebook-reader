@@ -563,8 +563,21 @@ dialog form { padding: 20px; overflow-y: auto; }
 }
 .graph-shell { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .graph-header, .graph-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; }
-.graph-header { border-bottom: 1px solid var(--line); }
+.graph-header { display: grid; grid-template-columns: auto minmax(190px, 320px) auto; border-bottom: 1px solid var(--line); }
 .graph-header h2 { margin: 2px 0 0; font-family: ui-serif, Georgia, "Songti SC", serif; font-size: 21px; font-weight: 500; }
+.graph-search-field { position: relative; display: block; min-width: 0; }
+.graph-search-field svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 17px;
+  height: 17px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.graph-search-field input { width: 100%; min-height: 38px; padding: 7px 36px 7px 34px; }
+.graph-search-field kbd { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.graph-search-field:focus-within kbd { opacity: 0; }
 .graph-controls { display: flex; align-items: center; gap: 4px; }
 .graph-zoom-label { min-width: 44px; color: var(--muted); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .graph-viewport {
@@ -602,6 +615,7 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node { cursor: pointer; outline: none; }
 .graph-node rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(38 35 31 / 12%)); }
 .graph-node:hover rect, .graph-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
+.graph-node:focus-visible rect { filter: drop-shadow(0 0 5px rgb(42 100 112 / 32%)); }
 .graph-node.selected rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 3; }
 .graph-node.current rect { stroke: var(--warning); stroke-dasharray: 6 4; stroke-width: 3; }
 .graph-node.current.selected rect { stroke-dasharray: none; }
@@ -611,6 +625,8 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node.status-done rect { fill: #e4eee1; }
 .graph-node.visited:not(.selected):not(.current):not(.ending) rect { stroke: var(--visited); stroke-width: 2; }
 .graph-node.ending:not(.selected):not(.current) rect { stroke: var(--ending); stroke-width: 2.5; }
+.graph-node.search-muted { opacity: .24; }
+.graph-node.search-match:not(.selected):not(.current) rect { stroke: var(--accent); stroke-width: 2.5; }
 .graph-node text { pointer-events: none; fill: var(--ink); stroke: none; font-family: inherit; font-synthesis: none; }
 .graph-node-id { font-size: 15px; font-weight: 400; }
 .graph-node-title { font-size: 13px; font-weight: 400; }
@@ -618,6 +634,8 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node-traits { fill: var(--muted) !important; font-size: 10.5px; font-weight: 400; }
 .graph-footer { min-height: 62px; border-top: 1px solid var(--line); }
 .graph-footer span { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.graph-footer-copy { min-width: 0; display: grid; gap: 4px; }
+.graph-footer-copy small { color: var(--muted); font-size: 11px; }
 
 .shortcut-dialog { width: min(1080px, calc(100vw - 28px)); }
 .shortcut-shell { max-height: calc(100dvh - 28px); padding: 20px; overflow-y: auto; }
@@ -698,6 +716,14 @@ dialog form { padding: 20px; overflow-y: auto; }
   .full-width { grid-column: auto; }
   .dialog-actions { flex-wrap: wrap; }
   .graph-header, .graph-footer { padding: 9px 10px; }
+  .graph-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .graph-header > div:first-child .eyebrow { display: none; }
+  .graph-header h2 { font-size: 18px; }
+  .graph-controls { gap: 2px; }
+  .graph-controls .icon-button { width: 34px; height: 34px; min-height: 34px; }
+  .graph-controls .compact-button { min-height: 34px; padding-inline: 8px; }
+  .graph-zoom-label { min-width: 36px; }
+  .graph-search-field { grid-column: 1 / -1; grid-row: 2; }
   .graph-footer { align-items: stretch; flex-direction: column; }
   .graph-footer .button { width: 100%; }
   .shortcut-shell { padding: 16px; }

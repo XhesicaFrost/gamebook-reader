@@ -300,12 +300,19 @@
   </dialog>
 
   <dialog id="graphDialog" class="graph-dialog">
-    <section class="graph-shell">
+    <section class="graph-shell" aria-labelledby="graphDialogTitle">
       <header class="graph-header">
         <div>
           <p class="eyebrow">非线性路线</p>
-          <h2>节点关系图</h2>
+          <h2 id="graphDialogTitle">节点关系图</h2>
         </div>
+        <label class="graph-search-field" for="graphNodeSearch">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+          <span class="sr-only">搜索关系图节点</span>
+          <input id="graphNodeSearch" type="search" autocomplete="off" placeholder="搜索图中节点" aria-describedby="graphSearchHint">
+          <kbd>/</kbd>
+        </label>
+        <span id="graphSearchHint" class="sr-only" role="status" aria-live="polite"></span>
         <div class="graph-controls" aria-label="关系图控制">
           <button id="graphZoomOutButton" class="icon-button" type="button" aria-label="缩小关系图" title="缩小关系图">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 12h10"/></svg>
@@ -327,7 +334,10 @@
         </div>
       </div>
       <footer class="graph-footer">
-        <span id="graphSelectionLabel">尚未选中节点</span>
+        <div class="graph-footer-copy">
+          <span id="graphSelectionLabel">尚未选中节点</span>
+          <small><kbd>方向键</kbd> 选点 · <kbd>/</kbd> 搜索 · <kbd>J</kbd> 跳转</small>
+        </div>
         <button id="graphJumpButton" class="button button-primary" type="button" disabled>跳转到选中节点</button>
       </footer>
     </section>
@@ -370,6 +380,8 @@
             <div><dt><kbd>V</kbd></dt><dd>切换“已经走过”</dd></div>
             <div><dt><kbd>Shift</kbd>+<kbd>E</kbd></dt><dd>切换“结局节点”</dd></div>
             <div><dt><kbd>M</kbd></dt><dd>打开节点关系图</dd></div>
+            <div><dt><kbd>方向键</kbd> / <kbd>Home</kbd> / <kbd>End</kbd></dt><dd>在关系图中按空间位置选择节点；首个 / 末个节点</dd></div>
+            <div><dt><kbd>/</kbd> / <kbd>Enter</kbd> / <kbd>J</kbd></dt><dd>关系图中搜索、选中首个结果、跳转到选中节点</dd></div>
             <div><dt><kbd>Delete</kbd></dt><dd>删除选中节点（仍会二次确认）</dd></div>
             <div><dt><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></dt><dd>表单中进入下一项 / 返回上一项</dd></div>
             <div><dt><kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd></dt><dd>保存正在编辑的节点或关系</dd></div>
