@@ -33,6 +33,10 @@
         数据
       </button>
       <div id="moreMenu" class="menu" hidden>
+        <button id="shortcutHelpButton" type="button" aria-keyshortcuts="?">
+          快捷键
+          <kbd>?</kbd>
+        </button>
         <button id="exportButton" type="button">导出书签数据</button>
         <label for="importInput">导入书签数据</label>
         <input id="importInput" type="file" accept="application/json,.json" hidden>
@@ -45,24 +49,24 @@
     <section id="reader" class="reader-panel" aria-label="PDF 阅读器">
       <div class="reader-toolbar">
         <div class="toolbar-group">
-          <button id="backButton" class="icon-button" type="button" aria-label="回溯到上一个阅读位置" title="回溯到上一个阅读位置">
+          <button id="backButton" class="icon-button" type="button" aria-label="回溯到上一个阅读位置" aria-keyshortcuts="Alt+ArrowLeft B" title="回溯（B / Alt+←）">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m10 7-5 5 5 5M5 12h10a4 4 0 0 1 4 4v1"/></svg>
           </button>
-          <button id="previousPageButton" class="icon-button" type="button" aria-label="上一阅读页" title="上一阅读页">
+          <button id="previousPageButton" class="icon-button" type="button" aria-label="上一阅读页" aria-keyshortcuts="ArrowLeft ArrowUp PageUp Shift+Space" title="上一阅读页（← / ↑ / PageUp / Shift+空格）">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <div class="page-readout" aria-live="polite">
             <span>阅读页</span>
             <strong><span id="currentPdfPage">1</span><small> / <span id="totalPdfPages">—</span></small></strong>
           </div>
-          <button id="nextPageButton" class="icon-button" type="button" aria-label="下一阅读页" title="下一阅读页">
+          <button id="nextPageButton" class="icon-button" type="button" aria-label="下一阅读页" aria-keyshortcuts="ArrowRight ArrowDown PageDown Space" title="下一阅读页（→ / ↓ / PageDown / 空格）">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
           </button>
         </div>
 
         <form id="jumpForm" class="jump-form">
           <label for="jumpInput">节点或书中页码</label>
-          <input id="jumpInput" inputmode="numeric" autocomplete="off" placeholder="例如 42" required>
+          <input id="jumpInput" inputmode="numeric" autocomplete="off" placeholder="例如 42（G 快速定位）" aria-keyshortcuts="G Control+K Meta+K" required>
           <button class="button button-primary" type="submit">跳转</button>
         </form>
 
@@ -76,16 +80,16 @@
           </button>
         </div>
 
-        <button id="sidebarToggleButton" class="icon-button" type="button" aria-label="收起节点侧栏" title="收起节点侧栏" aria-expanded="true" aria-controls="nodeSidebar">
+        <button id="sidebarToggleButton" class="icon-button" type="button" aria-label="收起节点侧栏" aria-keyshortcuts="S" title="收起节点侧栏（S）" aria-expanded="true" aria-controls="nodeSidebar">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM15 5v14M11 9l-3 3 3 3"/></svg>
         </button>
 
-        <button id="fullscreenButton" class="icon-button" type="button" aria-label="全屏阅读" title="全屏阅读">
+        <button id="fullscreenButton" class="icon-button" type="button" aria-label="全屏阅读" aria-keyshortcuts="F" title="全屏阅读（F）">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
         </button>
       </div>
 
-      <div id="pdfStage" class="pdf-stage">
+      <div id="pdfStage" class="pdf-stage" tabindex="-1">
         <div id="pdfEmpty" class="empty-reader">
           <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M13 5h16l8 8v30H13z"/><path d="M29 5v9h8M19 24h12M19 30h12"/></svg>
           <h2>选择一本扫描版 PDF</h2>
@@ -131,8 +135,8 @@
               <p id="currentNodeMeta" class="muted"></p>
             </div>
             <div class="current-node-actions">
-              <button id="jumpSelectedNodeButton" class="button button-primary compact-button" type="button">跳转</button>
-              <button id="editCurrentNodeButton" class="icon-button" type="button" aria-label="编辑选中节点" title="编辑选中节点">
+              <button id="jumpSelectedNodeButton" class="button button-primary compact-button" type="button" aria-keyshortcuts="J">跳转 <kbd>J</kbd></button>
+              <button id="editCurrentNodeButton" class="icon-button" type="button" aria-label="编辑选中节点" aria-keyshortcuts="E" title="编辑选中节点（E）">
                 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
               </button>
               <div class="node-action-menu-wrap">
@@ -141,11 +145,11 @@
                   更多
                 </button>
                 <div id="nodeActionMenu" class="node-action-menu" hidden>
-                  <button id="toggleVisitedNodeButton" type="button">
+                  <button id="toggleVisitedNodeButton" type="button" aria-keyshortcuts="V">
                     <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>
                     <span>标记为已走过</span>
                   </button>
-                  <button id="toggleEndingNodeButton" type="button">
+                  <button id="toggleEndingNodeButton" type="button" aria-keyshortcuts="Shift+E">
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6"/></svg>
                     <span>标记为结局</span>
                   </button>
@@ -162,7 +166,7 @@
 
           <div class="section-heading compact">
             <h3>从这里可以前往</h3>
-            <button id="addChoiceButton" class="text-button" type="button">添加关系</button>
+            <button id="addChoiceButton" class="text-button" type="button" aria-keyshortcuts="C">添加关系 <kbd>C</kbd></button>
           </div>
           <div id="choiceList" class="choice-list"></div>
           <form id="choiceForm" class="choice-form" hidden>
@@ -188,11 +192,11 @@
             <p id="nodeCount">0 个节点</p>
           </div>
           <div class="node-heading-actions">
-            <button id="openGraphButton" class="button button-quiet compact-button" type="button">
+            <button id="openGraphButton" class="button button-quiet compact-button" type="button" aria-keyshortcuts="M">
               <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8.5 6.2 7 .5M7.4 8.2l3.3 7.4M16.8 9.2l-3.5 6.5"/></svg>
               关系图
             </button>
-            <button id="addNodeButton" class="button button-primary compact-button" type="button">
+            <button id="addNodeButton" class="button button-primary compact-button" type="button" aria-keyshortcuts="N">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
               添加
             </button>
@@ -201,7 +205,7 @@
         <label class="search-field" for="nodeSearch">
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
           <span class="sr-only">搜索节点</span>
-          <input id="nodeSearch" type="search" placeholder="搜索编号、标题或标记">
+          <input id="nodeSearch" type="search" placeholder="搜索编号、标题或标记（/）" aria-keyshortcuts="/">
         </label>
         <div id="nodeList" class="node-list"></div>
       </section>
@@ -323,6 +327,65 @@
         <span id="graphSelectionLabel">尚未选中节点</span>
         <button id="graphJumpButton" class="button button-primary" type="button" disabled>跳转到选中节点</button>
       </footer>
+    </section>
+  </dialog>
+
+  <dialog id="shortcutDialog" class="shortcut-dialog">
+    <section class="shortcut-shell" aria-labelledby="shortcutDialogTitle">
+      <header class="dialog-heading shortcut-heading">
+        <div>
+          <p class="eyebrow">纯键盘阅读</p>
+          <h2 id="shortcutDialogTitle">快捷键</h2>
+          <p>输入框内按键仍用于正常输入；按 <kbd>Esc</kbd> 返回阅读区。</p>
+        </div>
+        <button id="closeShortcutDialogButton" class="icon-button" type="button" aria-label="关闭快捷键" title="关闭（Esc）">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+
+      <div class="shortcut-groups">
+        <section>
+          <h3>连续阅读</h3>
+          <dl class="shortcut-list">
+            <div><dt><kbd>→</kbd> <kbd>↓</kbd> <kbd>PageDown</kbd> <kbd>Space</kbd></dt><dd>下一阅读页</dd></div>
+            <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>PageUp</kbd> <kbd>Shift</kbd>+<kbd>Space</kbd></dt><dd>上一阅读页</dd></div>
+            <div><dt><kbd>Home</kbd> / <kbd>End</kbd></dt><dd>第一阅读页 / 最后一阅读页</dd></div>
+            <div><dt><kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd></dt><dd>直接执行当前卡片第 1–10 个选项</dd></div>
+            <div><dt><kbd>B</kbd> 或 <kbd>Alt</kbd>+<kbd>←</kbd></dt><dd>回溯上一个阅读位置</dd></div>
+            <div><dt><kbd>G</kbd> 或 <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd></dt><dd>输入节点编号或书中页码并跳转</dd></div>
+            <div><dt><kbd>J</kbd></dt><dd>跳转到当前选中的节点</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h3>节点与路线</h3>
+          <dl class="shortcut-list">
+            <div><dt><kbd>/</kbd></dt><dd>搜索节点；方向键浏览，<kbd>Enter</kbd> 选中，<kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd> 跳转</dd></div>
+            <div><dt><kbd>N</kbd></dt><dd>在当前书页添加节点</dd></div>
+            <div><dt><kbd>E</kbd></dt><dd>编辑选中的节点</dd></div>
+            <div><dt><kbd>C</kbd></dt><dd>为选中节点添加跳转关系</dd></div>
+            <div><dt><kbd>V</kbd></dt><dd>切换“已经走过”</dd></div>
+            <div><dt><kbd>Shift</kbd>+<kbd>E</kbd></dt><dd>切换“结局节点”</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd>打开节点关系图</dd></div>
+            <div><dt><kbd>Delete</kbd></dt><dd>删除选中节点（仍会二次确认）</dd></div>
+            <div><dt><kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd></dt><dd>保存正在编辑的节点或关系</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h3>阅读界面</h3>
+          <dl class="shortcut-list">
+            <div><dt><kbd>+</kbd> / <kbd>−</kbd></dt><dd>放大 / 缩小 PDF；关系图打开时缩放关系图</dd></div>
+            <div><dt><kbd>0</kbd></dt><dd>关系图打开时显示全部</dd></div>
+            <div><dt><kbd>S</kbd></dt><dd>展开或收起节点侧栏</dd></div>
+            <div><dt><kbd>F</kbd></dt><dd>进入或退出 PDF 全屏</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>选择 PDF</dd></div>
+            <div><dt><kbd>?</kbd></dt><dd>打开本页快捷键帮助</dd></div>
+            <div><dt><kbd>Esc</kbd></dt><dd>关闭菜单、表单或弹窗</dd></div>
+            <div><dt><kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd></dt><dd>撤销刚刚删除的节点（提示仍显示时）</dd></div>
+          </dl>
+        </section>
+      </div>
     </section>
   </dialog>
 

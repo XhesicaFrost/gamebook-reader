@@ -43,6 +43,26 @@ body {
 button, input, textarea, select { font: inherit; }
 button, label[for], summary { touch-action: manipulation; }
 
+kbd {
+  min-width: 22px;
+  min-height: 20px;
+  padding: 1px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -137,6 +157,7 @@ svg {
 
 .button-primary { background: var(--accent); color: white; }
 .button-primary:hover { background: var(--accent-hover); }
+.button-primary kbd { border-color: rgb(255 255 255 / 55%); background: transparent; color: inherit; }
 .button-quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .button-quiet:hover { background: #e9e4da; border-color: var(--line-strong); }
 .button-danger { background: var(--danger-soft); color: var(--danger); }
@@ -183,6 +204,7 @@ svg {
   color: var(--ink);
   text-align: left;
 }
+.menu button kbd { margin-left: auto; }
 
 .menu button:hover, .menu label:hover { background: var(--bg); }
 .danger-text { color: var(--danger) !important; }
@@ -424,8 +446,10 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
   cursor: pointer;
 }
 .choice-jump:hover { border-color: var(--accent); background: var(--accent-soft); }
-.choice-jump strong { display: block; }
-.choice-jump span { color: var(--muted); font-size: 12px; }
+.choice-mainline { display: flex; align-items: center; gap: 7px; }
+.choice-mainline strong { min-width: 0; overflow-wrap: anywhere; }
+.choice-mainline kbd { flex: 0 0 auto; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.choice-jump > span:not(.choice-mainline) { color: var(--muted); font-size: 12px; }
 .choice-edit, .choice-delete { min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
 .choice-edit:hover { color: var(--accent); background: var(--accent-soft); }
 .choice-delete:hover { color: var(--danger); background: var(--danger-soft); }
@@ -590,6 +614,27 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-footer { min-height: 62px; border-top: 1px solid var(--line); }
 .graph-footer span { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 
+.shortcut-dialog { width: min(1080px, calc(100vw - 28px)); }
+.shortcut-shell { max-height: calc(100dvh - 28px); padding: 20px; overflow-y: auto; }
+.shortcut-heading { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.shortcut-heading h2 { margin: 3px 0 0; font-family: ui-serif, Georgia, "Songti SC", serif; font-weight: 500; }
+.shortcut-heading p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+.shortcut-groups { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 22px; }
+.shortcut-groups h3 { margin: 0 0 8px; font-size: 14px; }
+.shortcut-list { margin: 0; display: grid; gap: 2px; }
+.shortcut-list > div {
+  min-height: 48px;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 1px solid var(--line);
+}
+.shortcut-list dt, .shortcut-list dd { margin: 0; }
+.shortcut-list dt { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; color: var(--muted); font-size: 12px; }
+.shortcut-list dd { font-size: 13px; }
+
 .toast {
   position: fixed;
   z-index: 100;
@@ -650,6 +695,9 @@ dialog form { padding: 20px; overflow-y: auto; }
   .graph-header, .graph-footer { padding: 9px 10px; }
   .graph-footer { align-items: stretch; flex-direction: column; }
   .graph-footer .button { width: 100%; }
+  .shortcut-shell { padding: 16px; }
+  .shortcut-groups { grid-template-columns: 1fr; gap: 22px; }
+  .shortcut-list > div { gap: 6px; }
 }
 
 @media (prefers-color-scheme: dark) {

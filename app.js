@@ -52,7 +52,7 @@
     previousPageButton: $("previousPageButton"), nextPageButton: $("nextPageButton"), backButton: $("backButton"),
     zoomOutButton: $("zoomOutButton"), zoomInButton: $("zoomInButton"), zoomLabel: $("zoomLabel"),
     sidebarToggleButton: $("sidebarToggleButton"), fullscreenButton: $("fullscreenButton"), moreButton: $("moreButton"), moreMenu: $("moreMenu"),
-    exportButton: $("exportButton"), resetButton: $("resetButton"),
+    shortcutHelpButton: $("shortcutHelpButton"), exportButton: $("exportButton"), resetButton: $("resetButton"),
     noCurrentNode: $("noCurrentNode"), currentNodeContent: $("currentNodeContent"),
     currentNodeTitle: $("currentNodeTitle"), currentNodeStatus: $("currentNodeStatus"), currentNodeVisited: $("currentNodeVisited"),
     currentNodeEnding: $("currentNodeEnding"), currentNodeMeta: $("currentNodeMeta"),
@@ -73,6 +73,7 @@
     graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphCanvas: $("graphCanvas"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
     graphSelectionLabel: $("graphSelectionLabel"), graphJumpButton: $("graphJumpButton"), graphZoomOutButton: $("graphZoomOutButton"),
     graphZoomInButton: $("graphZoomInButton"), graphZoomLabel: $("graphZoomLabel"), graphFitButton: $("graphFitButton"), closeGraphButton: $("closeGraphButton"),
+    shortcutDialog: $("shortcutDialog"), closeShortcutDialogButton: $("closeShortcutDialogButton"),
     toast: $("toast"), toastMessage: $("toastMessage"), toastAction: $("toastAction")
   };
 
@@ -625,7 +626,7 @@
       empty.textContent = "还没有跳转关系。";
       els.choiceList.append(empty);
     }
-    for (const choice of node.choices) {
+    for (const [choiceIndex, choice] of node.choices.entries()) {
       const target = state.nodes[choice.targetNodeId];
       const row = document.createElement("div");
       row.className = "choice-row";
@@ -633,12 +634,23 @@
       jump.type = "button";
       jump.className = "choice-jump";
       jump.disabled = !target;
+      const mainline = document.createElement("span");
+      mainline.className = "choice-mainline";
+      const shortcutNumber = choiceIndex < 10 ? (choiceIndex + 1) % 10 : null;
+      if (shortcutNumber !== null) {
+        const shortcut = document.createElement("kbd");
+        shortcut.textContent = String(shortcutNumber);
+        shortcut.setAttribute("aria-hidden", "true");
+        mainline.append(shortcut);
+        jump.setAttribute("aria-keyshortcuts", String(shortcutNumber));
+      }
       const label = document.createElement("strong");
       label.textContent = choice.label;
+      mainline.append(label);
       const meta = document.createElement("span");
       const targetBookPage = target ? resolveNodeBookPage(target) : null;
       meta.textContent = target ? `前往 ${nodeLabel(target)}${targetBookPage ? ` · 书中第 ${targetBookPage} 页` : ""}` : `目标节点 ${choice.targetNodeId} 已不存在`;
-      jump.append(label, meta);
+      jump.append(mainline, meta);
       jump.addEventListener("click", () => navigateToNode(choice.targetNodeId));
       const edit = document.createElement("button");
       edit.type = "button";
@@ -691,6 +703,7 @@
       const item = document.createElement("button");
       item.type = "button";
       item.className = "node-item";
+      item.dataset.nodeId = node.id;
       item.setAttribute("aria-selected", String(node.id === state.selectedNodeId));
       if (node.id === state.currentNodeId) item.setAttribute("aria-current", "true");
       const number = document.createElement("span");
@@ -1238,6 +1251,75 @@
     els.nodeMoreButton.setAttribute("aria-expanded", "false");
   }
 
+  function toggleSidebar() {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    saveState();
+    renderLayout();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => renderPdfPage(), 190);
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) els.pdfStage.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  function cancelChoiceForm() {
+    if (els.choiceForm.hidden) return false;
+    editingChoiceId = null;
+    choiceTargetCandidates = [];
+    els.choiceTargetHint.textContent = "";
+    els.choiceForm.hidden = true;
+    els.choiceForm.reset();
+    els.addChoiceButton.focus();
+    return true;
+  }
+
+  function openShortcutDialog() {
+    closeMoreMenu();
+    closeNodeActionMenu();
+    els.shortcutDialog.showModal();
+    setTimeout(() => els.closeShortcutDialogButton.focus(), 0);
+  }
+
+  function activateChoiceShortcut(index) {
+    if (!pdfDocument) {
+      showToast("请先选择 PDF");
+      return;
+    }
+    const node = selectedNode();
+    const choice = node?.choices[index];
+    if (!choice) {
+      showToast(node ? `这个节点没有第 ${index + 1} 个选项` : "请先选中一个节点");
+      return;
+    }
+    if (!state.nodes[choice.targetNodeId]) {
+      showToast(`选项“${choice.label}”的目标节点已不存在`);
+      return;
+    }
+    navigateToNode(choice.targetNodeId);
+  }
+
+  function firstVisibleNodeButton() {
+    return els.nodeList.querySelector(".node-item");
+  }
+
+  function focusNodeSearch() {
+    if (state.sidebarCollapsed) {
+      state.sidebarCollapsed = false;
+      saveState();
+      renderLayout();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderPdfPage(), 190);
+    }
+    els.nodeSearch.focus();
+    els.nodeSearch.select();
+  }
+
+  function isTextEntry(target) {
+    return Boolean(target.closest?.("input, textarea, select, [contenteditable='true']"));
+  }
+
   els.pdfInput.addEventListener("change", () => handlePdfFile(els.pdfInput.files[0]));
   els.importInput.addEventListener("change", () => importData(els.importInput.files[0]));
   els.jumpForm.addEventListener("submit", handleJump);
@@ -1246,23 +1328,14 @@
   els.backButton.addEventListener("click", goBack);
   els.zoomOutButton.addEventListener("click", () => changeZoom(-0.25));
   els.zoomInButton.addEventListener("click", () => changeZoom(0.25));
-  els.sidebarToggleButton.addEventListener("click", () => {
-    state.sidebarCollapsed = !state.sidebarCollapsed;
-    saveState();
-    renderLayout();
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => renderPdfPage(), 190);
-  });
+  els.sidebarToggleButton.addEventListener("click", toggleSidebar);
   els.offsetInput.addEventListener("change", () => {
     state.offset = asInteger(els.offsetInput.value, 0);
     saveState();
     render();
     showToast("页码偏移已保存");
   });
-  els.fullscreenButton.addEventListener("click", () => {
-    if (!document.fullscreenElement) els.pdfStage.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  });
+  els.fullscreenButton.addEventListener("click", toggleFullscreen);
   document.addEventListener("fullscreenchange", () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => renderPdfPage(), 120);
@@ -1272,6 +1345,7 @@
     els.moreMenu.hidden = !willOpen;
     els.moreButton.setAttribute("aria-expanded", String(willOpen));
   });
+  els.shortcutHelpButton.addEventListener("click", openShortcutDialog);
   document.addEventListener("click", (event) => {
     if (!els.moreMenu.hidden && !els.moreMenu.contains(event.target) && !els.moreButton.contains(event.target)) closeMoreMenu();
     if (!els.nodeActionMenu.hidden && !els.nodeActionMenu.contains(event.target) && !els.nodeMoreButton.contains(event.target)) closeNodeActionMenu();
@@ -1307,45 +1381,270 @@
     els.graphDialog.close();
   });
   els.nodeSearch.addEventListener("input", renderNodeList);
+  els.nodeSearch.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      const first = firstVisibleNodeButton();
+      if (first) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    if (event.key !== "Enter") return;
+    const first = firstVisibleNodeButton();
+    if (!first) return;
+    event.preventDefault();
+    const id = first.dataset.nodeId;
+    selectNode(id);
+    if (event.ctrlKey || event.metaKey) navigateToNode(id);
+  });
+  els.nodeList.addEventListener("keydown", (event) => {
+    const item = event.target.closest?.(".node-item");
+    if (!item) return;
+    const items = Array.from(els.nodeList.querySelectorAll(".node-item"));
+    const index = items.indexOf(item);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      items[(index + step + items.length) % items.length]?.focus();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      navigateToNode(item.dataset.nodeId);
+    }
+  });
   els.nodeForm.addEventListener("submit", saveNodeFromForm);
+  els.nodeForm.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      els.nodeForm.requestSubmit();
+    }
+  });
   els.deleteNodeButton.addEventListener("click", deleteCurrentEditingNode);
   els.closeNodeDialogButton.addEventListener("click", () => els.nodeDialog.close());
   els.cancelNodeButton.addEventListener("click", () => els.nodeDialog.close());
   els.addChoiceButton.addEventListener("click", openChoiceForm);
   els.choiceTargetSearch.addEventListener("input", () => renderChoiceTargetOptions());
-  els.cancelChoiceButton.addEventListener("click", () => {
-    editingChoiceId = null;
-    choiceTargetCandidates = [];
-    els.choiceTargetHint.textContent = "";
-    els.choiceForm.hidden = true;
-    els.choiceForm.reset();
-  });
+  els.cancelChoiceButton.addEventListener("click", cancelChoiceForm);
   els.choiceForm.addEventListener("submit", saveChoice);
+  els.choiceForm.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      els.choiceForm.requestSubmit();
+    }
+  });
+  els.closeShortcutDialogButton.addEventListener("click", () => els.shortcutDialog.close());
   els.toastAction.addEventListener("click", () => {
     if (undoAction) undoAction();
     els.toast.hidden = true;
     undoAction = null;
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !els.nodeActionMenu.hidden) closeNodeActionMenu();
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    const key = event.key.toLowerCase();
+    const textEntry = isTextEntry(event.target);
+
+    if (event.key === "Escape") {
+      if (els.nodeDialog.open || els.graphDialog.open || els.shortcutDialog.open) return;
+      if (!els.nodeActionMenu.hidden) {
+        event.preventDefault();
+        closeNodeActionMenu();
+        els.nodeMoreButton.focus();
+        return;
+      }
+      if (!els.moreMenu.hidden) {
+        event.preventDefault();
+        closeMoreMenu();
+        els.moreButton.focus();
+        return;
+      }
+      if (cancelChoiceForm()) {
+        event.preventDefault();
+        return;
+      }
+      if (textEntry && !els.nodeDialog.open) {
+        event.target.blur();
+        els.pdfStage.focus?.({ preventScroll: true });
+      }
+      return;
+    }
+
+    if (event.defaultPrevented || els.shortcutDialog.open) return;
+
+    if (els.graphDialog.open) {
+      if (key === "j" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        const node = selectedNode();
+        if (node && pdfDocument) {
+          event.preventDefault();
+          navigateToNode(node.id);
+          els.graphDialog.close();
+        }
+      } else if ((event.key === "+" || event.key === "=") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        changeGraphZoom(0.2);
+      } else if (event.key === "-" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        changeGraphZoom(-0.2);
+      } else if (event.key === "0" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        fitGraph();
+      }
+      return;
+    }
+
+    if (els.nodeDialog.open) return;
+
+    if ((event.ctrlKey || event.metaKey) && key === "k") {
       event.preventDefault();
       els.jumpInput.focus();
+      els.jumpInput.select();
+      return;
     }
-    if (event.altKey && event.key === "ArrowLeft") { event.preventDefault(); goBack(); }
-    if (
-      event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
-      els.nodeDialog.open || els.graphDialog.open ||
-      event.target.closest?.("input, textarea, select, [contenteditable='true']") ||
-      !pdfDocument
-    ) return;
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+
+    if ((event.ctrlKey || event.metaKey) && key === "z" && undoAction && !textEntry) {
       event.preventDefault();
-      if (readingPageForPhysicalPage(state.currentPdfPage) > 1) navigateByPage(-1);
+      undoAction();
+      els.toast.hidden = true;
+      undoAction = null;
+      return;
     }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+
+    if (textEntry) return;
+
+    if (event.altKey && event.key === "ArrowLeft") {
       event.preventDefault();
-      if (readingPageForPhysicalPage(state.currentPdfPage) < readingPageCount()) navigateByPage(1);
+      goBack();
+      return;
+    }
+
+    if (event.key === "?" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      openShortcutDialog();
+      return;
+    }
+
+    if (event.shiftKey && event.code === "Space") {
+      if (event.target.closest?.("button, a, summary, [role='button']")) return;
+      event.preventDefault();
+      if (pdfDocument && readingPageForPhysicalPage(state.currentPdfPage) > 1) navigateByPage(-1);
+      return;
+    }
+
+    if (event.shiftKey && key === "e" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      toggleSelectedNodeProperty("ending");
+      return;
+    }
+
+    if ((event.key === "+" || event.key === "=") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      changeZoom(0.25);
+      return;
+    }
+    if (event.key === "-" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      changeZoom(-0.25);
+      return;
+    }
+
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+    if (["ArrowLeft", "ArrowUp", "PageUp"].includes(event.key)) {
+      event.preventDefault();
+      if (pdfDocument && readingPageForPhysicalPage(state.currentPdfPage) > 1) navigateByPage(-1);
+      return;
+    }
+    if (["ArrowRight", "ArrowDown", "PageDown"].includes(event.key)) {
+      event.preventDefault();
+      if (pdfDocument && readingPageForPhysicalPage(state.currentPdfPage) < readingPageCount()) navigateByPage(1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      if (pdfDocument) navigateToReadingPage(1);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      if (pdfDocument) navigateToReadingPage(readingPageCount());
+      return;
+    }
+    if (event.code === "Space") {
+      if (event.target.closest?.("button, a, summary, [role='button']")) return;
+      event.preventDefault();
+      if (pdfDocument && readingPageForPhysicalPage(state.currentPdfPage) < readingPageCount()) navigateByPage(1);
+      return;
+    }
+
+    if (/^[1-9]$/.test(event.key) || event.key === "0") {
+      event.preventDefault();
+      activateChoiceShortcut(event.key === "0" ? 9 : Number(event.key) - 1);
+      return;
+    }
+
+    const selected = selectedNode();
+    switch (key) {
+      case "b":
+        event.preventDefault();
+        goBack();
+        break;
+      case "g":
+        event.preventDefault();
+        els.jumpInput.focus();
+        els.jumpInput.select();
+        break;
+      case "/":
+        event.preventDefault();
+        focusNodeSearch();
+        break;
+      case "j":
+        event.preventDefault();
+        if (selected && pdfDocument) navigateToNode(selected.id);
+        else showToast(selected ? "请先选择 PDF" : "请先选中一个节点");
+        break;
+      case "n":
+        event.preventDefault();
+        if (pdfDocument) openNodeDialog();
+        else showToast("请先选择 PDF");
+        break;
+      case "e":
+        event.preventDefault();
+        if (selected) openNodeDialog(selected);
+        else showToast("请先选中一个节点");
+        break;
+      case "c":
+        event.preventDefault();
+        if (selected) openChoiceForm();
+        else showToast("请先选中一个节点");
+        break;
+      case "v":
+        event.preventDefault();
+        if (selected) toggleSelectedNodeProperty("visited");
+        else showToast("请先选中一个节点");
+        break;
+      case "m":
+        event.preventDefault();
+        openGraph();
+        break;
+      case "s":
+        event.preventDefault();
+        toggleSidebar();
+        break;
+      case "f":
+        event.preventDefault();
+        toggleFullscreen();
+        break;
+      case "o":
+        event.preventDefault();
+        els.pdfInput.click();
+        break;
+      case "delete":
+        event.preventDefault();
+        if (selected) requestDeleteNode(selected.id);
+        else showToast("请先选中一个节点");
+        break;
+      default:
+        break;
     }
   });
 
