@@ -754,11 +754,40 @@
     return element;
   }
 
+  function graphEdgeIdentity(sourceId, choiceIndex) {
+    return `${sourceId}\u0000${choiceIndex}`;
+  }
+
+  function reorderGraphColumn(columns, levels, neighbors, level, neighborLevel) {
+    const column = columns.get(level);
+    const neighborColumn = columns.get(neighborLevel);
+    if (!column?.length || !neighborColumn?.length) return;
+    const neighborOrder = new Map(neighborColumn.map((node, index) => [node.id, index]));
+    const previousOrder = new Map(column.map((node, index) => [node.id, index]));
+    const fallbackScale = neighborColumn.length / Math.max(1, column.length);
+    const scores = new Map(column.map((node) => {
+      const linkedIndexes = Array.from(neighbors.get(node.id) || [])
+        .filter((id) => levels.get(id) === neighborLevel)
+        .map((id) => neighborOrder.get(id));
+      const score = linkedIndexes.length
+        ? linkedIndexes.reduce((sum, index) => sum + index, 0) / linkedIndexes.length
+        : (previousOrder.get(node.id) + 0.5) * fallbackScale;
+      return [node.id, score];
+    }));
+    columns.set(level, [...column].sort((a, b) => scores.get(a.id) - scores.get(b.id) || previousOrder.get(a.id) - previousOrder.get(b.id)));
+  }
+
   function graphLayout(nodes) {
     const nodeIds = new Set(nodes.map((node) => node.id));
     const incoming = Object.fromEntries(nodes.map((node) => [node.id, 0]));
+    const neighbors = new Map(nodes.map((node) => [node.id, new Set()]));
     for (const node of nodes) {
-      for (const choice of node.choices) if (nodeIds.has(choice.targetNodeId)) incoming[choice.targetNodeId] += 1;
+      for (const choice of node.choices) {
+        if (!nodeIds.has(choice.targetNodeId)) continue;
+        incoming[choice.targetNodeId] += 1;
+        neighbors.get(node.id).add(choice.targetNodeId);
+        neighbors.get(choice.targetNodeId).add(node.id);
+      }
     }
     const roots = nodes.filter((node) => incoming[node.id] === 0);
     const orderedSeeds = [...roots, ...nodes.filter((node) => !roots.includes(node))];
@@ -783,26 +812,135 @@
       if (!columns.has(level)) columns.set(level, []);
       columns.get(level).push(node);
     }
+    const maxLevel = Math.max(0, ...columns.keys());
+    for (let pass = 0; pass < 6; pass += 1) {
+      for (let level = 1; level <= maxLevel; level += 1) reorderGraphColumn(columns, levels, neighbors, level, level - 1);
+      for (let level = maxLevel - 1; level >= 0; level -= 1) reorderGraphColumn(columns, levels, neighbors, level, level + 1);
+    }
+    const backwardEdges = [];
+    for (const source of nodes) {
+      source.choices.forEach((choice, choiceIndex) => {
+        if (!nodeIds.has(choice.targetNodeId) || levels.get(choice.targetNodeId) > levels.get(source.id)) return;
+        backwardEdges.push({
+          key: graphEdgeIdentity(source.id, choiceIndex),
+          start: levels.get(choice.targetNodeId),
+          end: levels.get(source.id)
+        });
+      });
+    }
+    backwardEdges.sort((a, b) => a.start - b.start || a.end - b.end);
+    const backwardLanes = new Map();
+    const laneEnds = [];
+    for (const edge of backwardEdges) {
+      let lane = laneEnds.findIndex((end) => edge.start > end);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = edge.end;
+      backwardLanes.set(edge.key, lane);
+    }
     const positions = new Map();
     const nodeWidth = 176;
     const nodeHeight = 78;
-    const horizontalGap = 136;
-    const verticalGap = 34;
-    const margin = 52;
+    const maximumDegree = Math.max(1, ...nodes.map((node) => Math.max(node.choices.filter((choice) => nodeIds.has(choice.targetNodeId)).length, incoming[node.id])));
+    const horizontalGap = 168 + Math.min(96, Math.max(0, maximumDegree - 2) * 16);
+    const verticalGap = 48 + Math.min(32, Math.max(0, maximumDegree - 3) * 8);
+    const margin = 60;
+    const backwardLaneGap = 30;
+    const topReserve = laneEnds.length * backwardLaneGap;
     let maxRows = 1;
+    for (const column of columns.values()) maxRows = Math.max(maxRows, column.length);
+    const contentHeight = maxRows * nodeHeight + (maxRows - 1) * verticalGap;
+    const orders = new Map();
     for (const [level, column] of columns) {
-      maxRows = Math.max(maxRows, column.length);
-      column.forEach((node, index) => positions.set(node.id, {
-        x: margin + level * (nodeWidth + horizontalGap),
-        y: margin + index * (nodeHeight + verticalGap)
-      }));
+      const columnHeight = column.length * nodeHeight + Math.max(0, column.length - 1) * verticalGap;
+      const columnTop = margin + topReserve + (contentHeight - columnHeight) / 2;
+      column.forEach((node, index) => {
+        orders.set(node.id, index);
+        positions.set(node.id, {
+          x: margin + level * (nodeWidth + horizontalGap),
+          y: columnTop + index * (nodeHeight + verticalGap)
+        });
+      });
     }
-    const maxLevel = Math.max(0, ...columns.keys());
     return {
-      positions, nodeWidth, nodeHeight,
+      positions, levels, orders, backwardLanes, backwardLaneGap, nodeWidth, nodeHeight,
       width: margin * 2 + (maxLevel + 1) * nodeWidth + maxLevel * horizontalGap,
-      height: margin * 2 + maxRows * nodeHeight + (maxRows - 1) * verticalGap
+      height: margin * 2 + topReserve + contentHeight
     };
+  }
+
+  function graphPortOffset(index, count) {
+    if (count <= 1) return 0;
+    const span = Math.min(50, (count - 1) * 14);
+    return -span / 2 + span * index / (count - 1);
+  }
+
+  function graphCubicPoint(edge, t) {
+    const inverse = 1 - t;
+    return {
+      x: inverse ** 3 * edge.x1 + 3 * inverse ** 2 * t * edge.c1x + 3 * inverse * t ** 2 * edge.c2x + t ** 3 * edge.x2,
+      y: inverse ** 3 * edge.y1 + 3 * inverse ** 2 * t * edge.c1y + 3 * inverse * t ** 2 * edge.c2y + t ** 3 * edge.y2
+    };
+  }
+
+  function graphCubicTangent(edge, t) {
+    const inverse = 1 - t;
+    return {
+      x: 3 * inverse ** 2 * (edge.c1x - edge.x1) + 6 * inverse * t * (edge.c2x - edge.c1x) + 3 * t ** 2 * (edge.x2 - edge.c2x),
+      y: 3 * inverse ** 2 * (edge.c1y - edge.y1) + 6 * inverse * t * (edge.c2y - edge.c1y) + 3 * t ** 2 * (edge.y2 - edge.c2y)
+    };
+  }
+
+  function graphRectOverlapArea(a, b, padding = 0) {
+    const width = Math.max(0, Math.min(a.right, b.right + padding) - Math.max(a.left, b.left - padding));
+    const height = Math.max(0, Math.min(a.bottom, b.bottom + padding) - Math.max(a.top, b.top - padding));
+    return width * height;
+  }
+
+  function placeGraphEdgeLabel(edge, width, layout, nodeObstacles, labelObstacles) {
+    const height = 22;
+    const candidates = [];
+    for (const offset of [0, 18, -18, 34, -34]) {
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78]) {
+        const point = graphCubicPoint(edge, t);
+        const tangent = graphCubicTangent(edge, t);
+        const length = Math.hypot(tangent.x, tangent.y) || 1;
+        const x = point.x - tangent.y / length * offset;
+        const y = point.y + tangent.x / length * offset;
+        const rect = { left: x - width / 2, right: x + width / 2, top: y - height / 2, bottom: y + height / 2 };
+        if (rect.left < 8 || rect.right > layout.width - 8 || rect.top < 8 || rect.bottom > layout.height - 8) continue;
+        const nodeOverlap = nodeObstacles.reduce((sum, obstacle) => sum + graphRectOverlapArea(rect, obstacle, 7), 0);
+        const labelOverlap = labelObstacles.reduce((sum, obstacle) => sum + graphRectOverlapArea(rect, obstacle, 5), 0);
+        const score = nodeOverlap * 100 + labelOverlap * 20 + Math.abs(t - 0.5) * 60 + Math.abs(offset) * 0.35;
+        candidates.push({ x, y, rect, score, clear: nodeOverlap === 0 && labelOverlap === 0 });
+      }
+    }
+    candidates.sort((a, b) => Number(b.clear) - Number(a.clear) || a.score - b.score);
+    const placement = candidates[0] || {
+      ...graphCubicPoint(edge, 0.5),
+      rect: { left: 0, right: width, top: 0, bottom: height }
+    };
+    if (!candidates.length) {
+      placement.rect = { left: placement.x - width / 2, right: placement.x + width / 2, top: placement.y - height / 2, bottom: placement.y + height / 2 };
+    }
+    labelObstacles.push(placement.rect);
+    return placement;
+  }
+
+  function placeGraphBackwardEdgeLabel(edge, width, layout, nodeObstacles, labelObstacles) {
+    const height = 22;
+    const candidates = [0.5, 0.4, 0.6, 0.3, 0.7].map((t) => {
+      const x = edge.x1 + (edge.x2 - edge.x1) * t;
+      const y = edge.routeY;
+      const rect = { left: x - width / 2, right: x + width / 2, top: y - height / 2, bottom: y + height / 2 };
+      const nodeOverlap = nodeObstacles.reduce((sum, obstacle) => sum + graphRectOverlapArea(rect, obstacle, 7), 0);
+      const labelOverlap = labelObstacles.reduce((sum, obstacle) => sum + graphRectOverlapArea(rect, obstacle, 5), 0);
+      return { x, y, rect, score: nodeOverlap * 100 + labelOverlap * 20 + Math.abs(t - 0.5) * 60, clear: nodeOverlap === 0 && labelOverlap === 0 };
+    }).filter((candidate) => candidate.rect.left >= 8 && candidate.rect.right <= layout.width - 8 && candidate.rect.top >= 8);
+    candidates.sort((a, b) => Number(b.clear) - Number(a.clear) || a.score - b.score);
+    const placement = candidates[0] || { x: (edge.x1 + edge.x2) / 2, y: edge.routeY };
+    placement.rect ||= { left: placement.x - width / 2, right: placement.x + width / 2, top: placement.y - height / 2, bottom: placement.y + height / 2 };
+    labelObstacles.push(placement.rect);
+    return placement;
   }
 
   function renderGraph() {
@@ -851,41 +989,87 @@
 
     const edges = svgElement("g", { class: "graph-edges" });
     const edgeLabels = svgElement("g", { class: "graph-edge-labels" });
+    const graphEdges = [];
     for (const source of nodes) {
       const start = layout.positions.get(source.id);
-      for (const choice of source.choices) {
+      source.choices.forEach((choice, choiceIndex) => {
         const target = state.nodes[choice.targetNodeId];
         const end = target ? layout.positions.get(target.id) : null;
-        if (!end) continue;
-        const x1 = start.x + layout.nodeWidth;
-        const y1 = start.y + layout.nodeHeight / 2;
-        const x2 = end.x;
-        const y2 = end.y + layout.nodeHeight / 2;
-        const bend = Math.max(50, Math.abs(x2 - x1) * 0.45);
-        const path = svgElement("path", {
-          d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`,
-          class: "graph-edge", "marker-end": "url(#graphArrow)"
+        if (!end) return;
+        graphEdges.push({
+          key: graphEdgeIdentity(source.id, choiceIndex),
+          source, target, choice, choiceIndex, start, end, sourceOffset: 0, targetOffset: 0
         });
-        const title = svgElement("title");
-        title.textContent = `${nodeLabel(source)} — ${choice.label} → ${nodeLabel(target)}`;
-        path.append(title);
-        edges.append(path);
-        const displayLabel = choice.label.length > 14 ? `${choice.label.slice(0, 13)}…` : choice.label;
-        const labelWidth = Math.min(118, Math.max(38, Array.from(displayLabel).length * 7.2 + 16));
-        const labelGroup = svgElement("g", {
-          class: "graph-edge-label",
-          transform: `translate(${(x1 + x2) / 2} ${(y1 + y2) / 2})`
-        });
-        const labelTitle = svgElement("title");
-        labelTitle.textContent = choice.label;
-        labelGroup.append(
-          svgElement("rect", { x: -labelWidth / 2, y: -11, width: labelWidth, height: 22, rx: 8 }),
-          svgElement("text", { x: 0, y: 4, "text-anchor": "middle" }),
-          labelTitle
-        );
-        labelGroup.querySelector("text").textContent = displayLabel;
-        edgeLabels.append(labelGroup);
-      }
+      });
+    }
+    const outgoingEdges = new Map();
+    const incomingEdges = new Map();
+    for (const edge of graphEdges) {
+      if (!outgoingEdges.has(edge.source.id)) outgoingEdges.set(edge.source.id, []);
+      if (!incomingEdges.has(edge.target.id)) incomingEdges.set(edge.target.id, []);
+      outgoingEdges.get(edge.source.id).push(edge);
+      incomingEdges.get(edge.target.id).push(edge);
+    }
+    for (const group of outgoingEdges.values()) {
+      group.sort((a, b) => a.end.y - b.end.y || a.target.id.localeCompare(b.target.id, "zh-CN", { numeric: true }));
+      group.forEach((edge, index) => { edge.sourceOffset = graphPortOffset(index, group.length); });
+    }
+    for (const group of incomingEdges.values()) {
+      group.sort((a, b) => a.start.y - b.start.y || a.source.id.localeCompare(b.source.id, "zh-CN", { numeric: true }));
+      group.forEach((edge, index) => { edge.targetOffset = graphPortOffset(index, group.length); });
+    }
+    for (const edge of graphEdges) {
+      edge.x1 = edge.start.x + layout.nodeWidth;
+      edge.y1 = edge.start.y + layout.nodeHeight / 2 + edge.sourceOffset;
+      edge.x2 = edge.end.x;
+      edge.y2 = edge.end.y + layout.nodeHeight / 2 + edge.targetOffset;
+      edge.backward = layout.backwardLanes.has(edge.key);
+      if (edge.backward) edge.routeY = 24 + layout.backwardLanes.get(edge.key) * layout.backwardLaneGap;
+      const bend = Math.max(54, Math.abs(edge.x2 - edge.x1) * 0.45);
+      edge.c1x = edge.x1 + bend;
+      edge.c1y = edge.y1;
+      edge.c2x = edge.x2 - bend;
+      edge.c2y = edge.y2;
+    }
+    graphEdges.sort((a, b) => Math.abs(a.x2 - a.x1) - Math.abs(b.x2 - b.x1) || a.source.id.localeCompare(b.source.id, "zh-CN", { numeric: true }) || a.choiceIndex - b.choiceIndex);
+    const nodeObstacles = nodes.map((node) => {
+      const position = layout.positions.get(node.id);
+      return { left: position.x, right: position.x + layout.nodeWidth, top: position.y, bottom: position.y + layout.nodeHeight };
+    });
+    const labelObstacles = [];
+    for (const edge of graphEdges) {
+      const { source, target, choice } = edge;
+      const pathData = edge.backward
+        ? `M ${edge.x1} ${edge.y1} C ${edge.x1 + 38} ${edge.y1}, ${edge.x1 + 38} ${edge.routeY}, ${edge.x1} ${edge.routeY} L ${edge.x2} ${edge.routeY} C ${edge.x2 - 38} ${edge.routeY}, ${edge.x2 - 38} ${edge.y2}, ${edge.x2} ${edge.y2}`
+        : `M ${edge.x1} ${edge.y1} C ${edge.c1x} ${edge.c1y}, ${edge.c2x} ${edge.c2y}, ${edge.x2} ${edge.y2}`;
+      const path = svgElement("path", {
+        d: pathData,
+        class: `graph-edge${edge.backward ? " graph-edge-backward" : ""}`, "marker-end": "url(#graphArrow)",
+        "data-source-node-id": source.id, "data-target-node-id": target.id
+      });
+      const title = svgElement("title");
+      title.textContent = `${nodeLabel(source)} — ${choice.label} → ${nodeLabel(target)}`;
+      path.append(title);
+      edges.append(path);
+      const displayLabel = choice.label.length > 14 ? `${choice.label.slice(0, 13)}…` : choice.label;
+      const labelWidth = Math.min(118, Math.max(38, Array.from(displayLabel).length * 7.2 + 16));
+      const placement = edge.backward
+        ? placeGraphBackwardEdgeLabel(edge, labelWidth, layout, nodeObstacles, labelObstacles)
+        : placeGraphEdgeLabel(edge, labelWidth, layout, nodeObstacles, labelObstacles);
+      const labelGroup = svgElement("g", {
+        class: "graph-edge-label",
+        transform: `translate(${placement.x} ${placement.y})`,
+        "data-source-node-id": source.id, "data-target-node-id": target.id
+      });
+      const labelTitle = svgElement("title");
+      labelTitle.textContent = choice.label;
+      labelGroup.append(
+        svgElement("rect", { x: -labelWidth / 2, y: -11, width: labelWidth, height: 22, rx: 8 }),
+        svgElement("text", { x: 0, y: 4, "text-anchor": "middle" }),
+        labelTitle
+      );
+      labelGroup.querySelector("text").textContent = displayLabel;
+      edgeLabels.append(labelGroup);
     }
     els.graphSvg.append(edges, edgeLabels);
 
@@ -903,6 +1087,7 @@
       const group = svgElement("g", {
         class: classes.join(" "), transform: `translate(${position.x} ${position.y})`,
         role: "button", tabindex: node.id === graphFocusedNodeId ? 0 : -1, "data-node-id": node.id,
+        "data-graph-level": layout.levels.get(node.id), "data-graph-order": layout.orders.get(node.id),
         "aria-label": `选择${nodeLabel(node)}${resolveNodeBookPage(node) ? `，书中第 ${resolveNodeBookPage(node)} 页` : ""}${graphTraits.length ? `，${graphTraits.join("，")}` : ""}`
       });
       group.append(svgElement("rect", { width: layout.nodeWidth, height: layout.nodeHeight, rx: 13 }));

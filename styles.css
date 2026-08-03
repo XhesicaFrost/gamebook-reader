@@ -601,6 +601,7 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-svg { display: block; max-width: none; min-width: 0; min-height: 0; }
 .graph-controls button:active { background: var(--accent-soft); }
 .graph-edge { fill: none; stroke: #9a9387; stroke-width: 2; opacity: .82; }
+.graph-edge-backward { stroke-dasharray: 5 4; opacity: .7; }
 .graph-arrow { fill: #777166; stroke: none; }
 .graph-edge-label { pointer-events: none; }
 .graph-edge-label rect { fill: var(--surface-strong); stroke: var(--line-strong); stroke-width: 1; }
