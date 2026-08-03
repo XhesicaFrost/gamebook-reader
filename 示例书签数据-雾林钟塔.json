@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "offset": 2,
   "currentPdfPage": 3,
   "currentNodeId": "1",
@@ -11,6 +11,8 @@
       "bookPage": 1,
       "pdfPage": null,
       "status": "none",
+      "ending": false,
+      "visited": true,
       "tags": "起点,岔路",
       "note": "这是冒险的起点。PDF 第 3 页对应书中第 1 页。",
       "choices": [
@@ -76,6 +78,8 @@
       "bookPage": 6,
       "pdfPage": null,
       "status": "done",
+      "ending": true,
+      "visited": false,
       "tags": "结局,钟塔",
       "note": "钟声响起，冒险完成。",
       "choices": [

@@ -13,7 +13,7 @@
   };
 
   const defaultState = () => ({
-    version: 2,
+    version: 3,
     offset: 0,
     currentPdfPage: 1,
     currentNodeId: null,
@@ -54,9 +54,11 @@
     sidebarToggleButton: $("sidebarToggleButton"), fullscreenButton: $("fullscreenButton"), moreButton: $("moreButton"), moreMenu: $("moreMenu"),
     exportButton: $("exportButton"), resetButton: $("resetButton"),
     noCurrentNode: $("noCurrentNode"), currentNodeContent: $("currentNodeContent"),
-    currentNodeTitle: $("currentNodeTitle"), currentNodeStatus: $("currentNodeStatus"), currentNodeMeta: $("currentNodeMeta"),
+    currentNodeTitle: $("currentNodeTitle"), currentNodeStatus: $("currentNodeStatus"), currentNodeVisited: $("currentNodeVisited"),
+    currentNodeEnding: $("currentNodeEnding"), currentNodeMeta: $("currentNodeMeta"),
     currentNodeTags: $("currentNodeTags"), currentNodeNote: $("currentNodeNote"), editCurrentNodeButton: $("editCurrentNodeButton"), jumpSelectedNodeButton: $("jumpSelectedNodeButton"),
-    nodeMoreButton: $("nodeMoreButton"), nodeActionMenu: $("nodeActionMenu"), deleteSelectedNodeButton: $("deleteSelectedNodeButton"),
+    nodeMoreButton: $("nodeMoreButton"), nodeActionMenu: $("nodeActionMenu"), toggleVisitedNodeButton: $("toggleVisitedNodeButton"),
+    toggleEndingNodeButton: $("toggleEndingNodeButton"), deleteSelectedNodeButton: $("deleteSelectedNodeButton"),
     choiceList: $("choiceList"), choiceForm: $("choiceForm"), addChoiceButton: $("addChoiceButton"),
     choiceLabel: $("choiceLabel"), choiceTargetSearch: $("choiceTargetSearch"), choiceTargetHint: $("choiceTargetHint"),
     choiceTarget: $("choiceTarget"), cancelChoiceButton: $("cancelChoiceButton"), saveChoiceButton: $("saveChoiceButton"),
@@ -65,6 +67,7 @@
     nodeDialog: $("nodeDialog"), nodeForm: $("nodeForm"), nodeDialogTitle: $("nodeDialogTitle"), editingNodeId: $("editingNodeId"),
     nodeIdInput: $("nodeIdInput"), nodeTitleInput: $("nodeTitleInput"), bookPageInput: $("bookPageInput"),
     nodePdfPageInput: $("nodePdfPageInput"), nodeStatusInput: $("nodeStatusInput"), nodeTagsInput: $("nodeTagsInput"),
+    nodeEndingInput: $("nodeEndingInput"), nodeVisitedInput: $("nodeVisitedInput"),
     nodeNoteInput: $("nodeNoteInput"), nodeFormError: $("nodeFormError"), deleteNodeButton: $("deleteNodeButton"),
     closeNodeDialogButton: $("closeNodeDialogButton"), cancelNodeButton: $("cancelNodeButton"),
     graphDialog: $("graphDialog"), graphViewport: $("graphViewport"), graphCanvas: $("graphCanvas"), graphSvg: $("graphSvg"), graphEmpty: $("graphEmpty"),
@@ -98,6 +101,7 @@
 
   function normalizeState(value) {
     const base = defaultState();
+    const nodesWithoutVisited = new Set();
     if (!value || typeof value !== "object") return base;
     base.offset = asInteger(value.offset, 0);
     base.currentPdfPage = positiveInteger(value.currentPdfPage, 1);
@@ -116,12 +120,15 @@
         if (!rawNode || rawNode.id == null) continue;
         const id = String(rawNode.id).trim();
         if (!id) continue;
+        if (!("visited" in rawNode) && !("isVisited" in rawNode)) nodesWithoutVisited.add(id);
         base.nodes[id] = {
           id,
           title: stringValue(rawNode.title),
           bookPage: optionalPositiveInteger(rawNode.bookPage),
           pdfPage: optionalPositiveInteger(rawNode.pdfPage),
           status: STATUS_LABELS[rawNode.status] ? rawNode.status : "none",
+          ending: Boolean(rawNode.ending ?? rawNode.isEnding),
+          visited: Boolean(rawNode.visited ?? rawNode.isVisited),
           tags: stringValue(rawNode.tags),
           note: stringValue(rawNode.note),
           choices: Array.isArray(rawNode.choices) ? rawNode.choices.map((choice) => ({
@@ -134,6 +141,10 @@
     }
     if (base.currentNodeId && !base.nodes[base.currentNodeId]) base.currentNodeId = null;
     if (base.selectedNodeId && !base.nodes[base.selectedNodeId]) base.selectedNodeId = base.currentNodeId;
+    if (base.currentNodeId && nodesWithoutVisited.has(base.currentNodeId)) base.nodes[base.currentNodeId].visited = true;
+    for (const entry of base.history) {
+      if (entry.nodeId && base.nodes[entry.nodeId] && nodesWithoutVisited.has(entry.nodeId)) base.nodes[entry.nodeId].visited = true;
+    }
     return base;
   }
 
@@ -335,20 +346,26 @@
     const requestedPage = positiveInteger(page, 0);
     if (!requestedPage) {
       showToast("页码必须是大于 0 的整数");
-      return;
+      return false;
     }
     if (pdfDocument && requestedPage > pdfDocument.numPages) {
       showToast(`这本书只有 ${readingPageCount()} 个可读页面`);
-      return;
+      return false;
     }
     const targetPage = normalizePhysicalPage(requestedPage);
     if (options.record !== false && targetPage !== state.currentPdfPage) pushCurrentToHistory();
     state.currentPdfPage = targetPage;
-    state.currentNodeId = options.nodeId == null ? null : String(options.nodeId);
-    if (options.nodeId != null) state.selectedNodeId = String(options.nodeId);
+    const targetNodeId = options.nodeId == null ? null : String(options.nodeId);
+    const targetNode = targetNodeId ? state.nodes[targetNodeId] : null;
+    state.currentNodeId = targetNode ? targetNodeId : null;
+    if (targetNode) {
+      targetNode.visited = true;
+      state.selectedNodeId = targetNodeId;
+    }
     saveState();
     updatePdfFrame();
     render();
+    return true;
   }
 
   function navigateToReadingPage(page, options = {}) {
@@ -585,6 +602,10 @@
     els.currentNodeTitle.textContent = node.title || `节点 ${node.id}`;
     els.currentNodeStatus.textContent = STATUS_LABELS[node.status];
     els.currentNodeStatus.dataset.status = node.status;
+    els.currentNodeVisited.hidden = !node.visited;
+    els.currentNodeEnding.hidden = !node.ending;
+    els.toggleVisitedNodeButton.lastElementChild.textContent = node.visited ? "标记为未走过" : "标记为已走过";
+    els.toggleEndingNodeButton.lastElementChild.textContent = node.ending ? "取消结局标记" : "标记为结局";
     const resolvedBookPage = resolveNodeBookPage(node);
     const bookText = resolvedBookPage ? `书中第 ${resolvedBookPage} 页` : "未设置书中页码";
     const pageSource = node.pdfPage ? "固定" : "偏移计算";
@@ -648,7 +669,10 @@
   function renderNodeList() {
     const nodes = sortedNodes();
     const query = els.nodeSearch.value.trim().toLocaleLowerCase();
-    const visible = query ? nodes.filter((node) => [node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status]].join(" ").toLocaleLowerCase().includes(query)) : nodes;
+    const visible = query ? nodes.filter((node) => [
+      node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status],
+      node.ending ? "结局 结局节点" : "", node.visited ? "已走过 已访问" : ""
+    ].join(" ").toLocaleLowerCase().includes(query)) : nodes;
     els.nodeCount.textContent = `${nodes.length} 个节点`;
     els.nodeList.replaceChildren();
     if (!visible.length) {
@@ -662,6 +686,8 @@
       const row = document.createElement("div");
       row.className = "node-item-row";
       if (node.id === state.currentNodeId) row.classList.add("is-reading");
+      if (node.visited) row.classList.add("is-visited");
+      if (node.ending) row.classList.add("is-ending");
       const item = document.createElement("button");
       item.type = "button";
       item.className = "node-item";
@@ -675,9 +701,12 @@
       const title = document.createElement("strong");
       title.textContent = node.title || `节点 ${node.id}`;
       const detail = document.createElement("span");
-      const reading = node.id === state.currentNodeId ? "正在阅读 · " : "";
-      const marker = node.status !== "none" ? `${STATUS_LABELS[node.status]} · ` : "";
-      detail.textContent = `${reading}${marker}${node.tags || "无文本标签"}`;
+      const markers = [];
+      if (node.id === state.currentNodeId) markers.push("正在阅读");
+      if (node.visited) markers.push("已走过");
+      if (node.ending) markers.push("结局");
+      if (node.status !== "none") markers.push(STATUS_LABELS[node.status]);
+      detail.textContent = `${markers.length ? `${markers.join(" · ")} · ` : ""}${node.tags || "无文本标签"}`;
       copy.append(title, detail);
       const page = document.createElement("span");
       page.className = "node-page";
@@ -735,7 +764,7 @@
     }
     const positions = new Map();
     const nodeWidth = 176;
-    const nodeHeight = 66;
+    const nodeHeight = 78;
     const horizontalGap = 136;
     const verticalGap = 34;
     const margin = 52;
@@ -831,20 +860,29 @@
       const classes = ["graph-node", `status-${node.status}`];
       if (node.id === state.selectedNodeId) classes.push("selected");
       if (node.id === state.currentNodeId) classes.push("current");
+      if (node.visited) classes.push("visited");
+      if (node.ending) classes.push("ending");
+      const graphTraits = [node.visited ? "已走过" : "", node.ending ? "结局" : ""].filter(Boolean);
       const group = svgElement("g", {
         class: classes.join(" "), transform: `translate(${position.x} ${position.y})`,
-        role: "button", tabindex: 0, "aria-label": `选择${nodeLabel(node)}${resolveNodeBookPage(node) ? `，书中第 ${resolveNodeBookPage(node)} 页` : ""}`
+        role: "button", tabindex: 0,
+        "aria-label": `选择${nodeLabel(node)}${resolveNodeBookPage(node) ? `，书中第 ${resolveNodeBookPage(node)} 页` : ""}${graphTraits.length ? `，${graphTraits.join("，")}` : ""}`
       });
       group.append(svgElement("rect", { width: layout.nodeWidth, height: layout.nodeHeight, rx: 13 }));
-      const idText = svgElement("text", { x: 14, y: 25, class: "graph-node-id" });
+      const idText = svgElement("text", { x: 14, y: 23, class: "graph-node-id" });
       idText.textContent = node.id;
-      const titleText = svgElement("text", { x: 14, y: 47, class: "graph-node-title" });
+      const titleText = svgElement("text", { x: 14, y: 46, class: "graph-node-title" });
       const rawTitle = node.title || `节点 ${node.id}`;
       titleText.textContent = rawTitle.length > 18 ? `${rawTitle.slice(0, 17)}…` : rawTitle;
-      const pageText = svgElement("text", { x: layout.nodeWidth - 13, y: 25, class: "graph-node-page", "text-anchor": "end" });
+      const pageText = svgElement("text", { x: layout.nodeWidth - 13, y: 23, class: "graph-node-page", "text-anchor": "end" });
       const graphBookPage = resolveNodeBookPage(node);
       pageText.textContent = graphBookPage ? `书 ${graphBookPage}` : "书页 —";
       group.append(idText, titleText, pageText);
+      if (graphTraits.length) {
+        const traitText = svgElement("text", { x: 14, y: 66, class: "graph-node-traits" });
+        traitText.textContent = graphTraits.join(" · ");
+        group.append(traitText);
+      }
       group.addEventListener("click", () => selectNode(node.id));
       group.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -931,6 +969,8 @@
       els.nodePdfPageInput.value = node.pdfPage ? readingPageForPhysicalPage(node.pdfPage) : "";
       els.nodeStatusInput.value = node.status;
       els.nodeTagsInput.value = node.tags;
+      els.nodeEndingInput.checked = node.ending;
+      els.nodeVisitedInput.checked = node.visited;
       els.nodeNoteInput.value = node.note;
     } else {
       const suggestedBookPage = readingPageForPhysicalPage(state.currentPdfPage) - state.offset;
@@ -971,6 +1011,8 @@
       bookPage,
       pdfPage,
       status: els.nodeStatusInput.value,
+      ending: els.nodeEndingInput.checked,
+      visited: els.nodeVisitedInput.checked,
       tags: els.nodeTagsInput.value.trim(),
       note: els.nodeNoteInput.value.trim(),
       choices: previous?.choices || []
@@ -990,6 +1032,17 @@
     els.nodeDialog.close();
     render();
     showToast(previous ? "节点已更新" : "节点已添加");
+  }
+
+  function toggleSelectedNodeProperty(property) {
+    const node = selectedNode();
+    if (!node || !["ending", "visited"].includes(property)) return;
+    node[property] = !node[property];
+    saveState();
+    closeNodeActionMenu();
+    render();
+    if (property === "ending") showToast(node.ending ? "已标记为结局节点" : "已取消结局标记");
+    else showToast(node.visited ? "已标记为走过" : "已标记为未走过");
   }
 
   function requestDeleteNode(id, closeDialog = false) {
@@ -1036,7 +1089,8 @@
       const bookPage = resolveNodeBookPage(node);
       return [
         node.id, node.title, node.tags, node.note, STATUS_LABELS[node.status],
-        bookPage, bookPage ? `书中第 ${bookPage} 页` : ""
+        bookPage, bookPage ? `书中第 ${bookPage} 页` : "",
+        node.ending ? "结局 结局节点" : "", node.visited ? "已走过 已访问" : ""
       ].filter(Boolean).join(" ").toLocaleLowerCase().includes(query);
     });
     els.choiceTarget.replaceChildren(...matches.map((node) => {
@@ -1235,6 +1289,8 @@
     els.nodeActionMenu.hidden = !willOpen;
     els.nodeMoreButton.setAttribute("aria-expanded", String(willOpen));
   });
+  els.toggleVisitedNodeButton.addEventListener("click", () => toggleSelectedNodeProperty("visited"));
+  els.toggleEndingNodeButton.addEventListener("click", () => toggleSelectedNodeProperty("ending"));
   els.deleteSelectedNodeButton.addEventListener("click", () => {
     const node = selectedNode();
     if (node) requestDeleteNode(node.id);

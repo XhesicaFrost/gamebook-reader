@@ -13,6 +13,10 @@
   --danger: #a13a35;
   --danger-soft: #f8e3df;
   --warning: #8a5d14;
+  --visited: #376f55;
+  --visited-soft: #e2eee7;
+  --ending: #744d8e;
+  --ending-soft: #eee4f4;
   --shadow-sm: 0 1px 2px rgb(38 35 31 / 8%);
   --shadow-md: 0 12px 36px rgb(38 35 31 / 14%);
   --radius-sm: 8px;
@@ -340,7 +344,7 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
   z-index: 12;
   top: calc(100% + 5px);
   right: 0;
-  width: 145px;
+  width: 185px;
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -360,7 +364,9 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
   text-align: left;
   cursor: pointer;
 }
-.node-action-menu button:hover { background: var(--danger-soft); }
+.node-action-menu button:hover { background: var(--accent-soft); }
+.node-action-menu .danger-text { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 7px 7px; }
+.node-action-menu .danger-text:hover { background: var(--danger-soft); }
 .node-action-menu svg { width: 17px; height: 17px; }
 .current-node-heading h2 { margin: 3px 0 1px; font-family: ui-serif, Georgia, "Songti SC", serif; font-size: 20px; }
 .title-line { gap: 8px; flex-wrap: wrap; }
@@ -386,6 +392,17 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
 .status-badge[data-status="clue"] { background: #e6e3f6; color: #554b91; }
 .status-badge[data-status="done"] { background: #e2ebdf; color: #3b6332; }
 .status-badge[data-status="none"] { display: none; }
+.trait-badge {
+  min-height: 24px;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.trait-visited { background: var(--visited-soft); color: var(--visited); }
+.trait-ending { background: var(--ending-soft); color: var(--ending); }
 
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-heading.compact { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -447,6 +464,8 @@ input::placeholder, textarea::placeholder { color: #827c72; opacity: 1; }
 .node-number { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: #e5e0d6; font-weight: 800; font-variant-numeric: tabular-nums; overflow: hidden; }
 .node-item[aria-selected="true"] .node-number { background: var(--accent); color: white; }
 .node-item-row.is-reading .node-item { box-shadow: inset 3px 0 0 var(--warning); }
+.node-item-row.is-visited .node-copy span { color: var(--visited); }
+.node-item-row.is-ending .node-number { box-shadow: inset 0 0 0 2px var(--ending); }
 .node-copy { min-width: 0; }
 .node-copy strong, .node-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-copy strong { font-size: 14px; }
@@ -483,6 +502,27 @@ dialog form { padding: 20px; overflow-y: auto; }
 .form-grid label { display: grid; align-content: start; gap: 5px; font-size: 13px; font-weight: 700; }
 .form-grid small { color: var(--muted); font-weight: 400; }
 .full-width { grid-column: 1 / -1; }
+.node-property-fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.node-property-fieldset legend { padding: 0 5px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.node-property-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.form-grid .node-property-option {
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  cursor: pointer;
+}
+.node-property-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.node-property-option input { width: 18px; min-height: 18px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--accent); }
+.node-property-option span, .node-property-option strong, .node-property-option small { display: block; }
+.node-property-option span { min-width: 0; }
+.node-property-option strong { font-size: 13px; font-weight: 600; }
+.node-property-option small { margin-top: 2px; line-height: 1.4; }
 .form-error { min-height: 24px; margin: 8px 0 0; color: var(--danger); font-size: 13px; }
 .dialog-actions { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .spacer { flex: 1; }
@@ -540,10 +580,13 @@ dialog form { padding: 20px; overflow-y: auto; }
 .graph-node.status-important rect { fill: #f5e8c8; }
 .graph-node.status-clue rect { fill: #e9e6f7; }
 .graph-node.status-done rect { fill: #e4eee1; }
+.graph-node.visited:not(.selected):not(.current):not(.ending) rect { stroke: var(--visited); stroke-width: 2; }
+.graph-node.ending:not(.selected):not(.current) rect { stroke: var(--ending); stroke-width: 2.5; }
 .graph-node text { pointer-events: none; fill: var(--ink); stroke: none; font-family: inherit; font-synthesis: none; }
 .graph-node-id { font-size: 15px; font-weight: 400; }
 .graph-node-title { font-size: 13px; font-weight: 400; }
 .graph-node-page { fill: var(--muted) !important; font-size: 11px; font-weight: 400; }
+.graph-node-traits { fill: var(--muted) !important; font-size: 10.5px; font-weight: 400; }
 .graph-footer { min-height: 62px; border-top: 1px solid var(--line); }
 .graph-footer span { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 
@@ -601,6 +644,7 @@ dialog form { padding: 20px; overflow-y: auto; }
   .pdf-viewport { padding: 8px; }
   .sidebar { padding: 10px; }
   .form-grid { grid-template-columns: 1fr; }
+  .node-property-options { grid-template-columns: 1fr; }
   .full-width { grid-column: auto; }
   .dialog-actions { flex-wrap: wrap; }
   .graph-header, .graph-footer { padding: 9px 10px; }
@@ -623,6 +667,10 @@ dialog form { padding: 20px; overflow-y: auto; }
     --accent-soft: #294337;
     --danger: #ef8e86;
     --danger-soft: #4e2c29;
+    --visited: #9acbb0;
+    --visited-soft: #294337;
+    --ending: #d0a5e5;
+    --ending-soft: #44344d;
   }
   .button-primary { color: #122119; }
   .button-quiet:hover, .icon-button:hover, .node-item:hover { background: #30342f; }
