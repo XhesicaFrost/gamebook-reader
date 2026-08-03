@@ -1040,7 +1040,6 @@
       for (const entry of state.history) if (entry.nodeId === oldId) entry.nodeId = id;
     }
     state.nodes[id] = node;
-    state.selectedNodeId = id;
     saveState();
     els.nodeDialog.close();
     render();
