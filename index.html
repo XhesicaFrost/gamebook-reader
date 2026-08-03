@@ -124,7 +124,7 @@
 
         <div id="currentNodeContent" hidden>
           <div class="current-node-heading">
-            <div>
+            <div class="current-node-summary">
               <p class="eyebrow">选中节点</p>
               <div class="title-line">
                 <h2 id="currentNodeTitle"></h2>
@@ -134,35 +134,36 @@
               </div>
               <p id="currentNodeMeta" class="muted"></p>
             </div>
-            <div class="current-node-actions">
-              <button id="jumpSelectedNodeButton" class="button button-primary compact-button" type="button" aria-keyshortcuts="J">跳转 <kbd>J</kbd></button>
-              <button id="editCurrentNodeButton" class="icon-button" type="button" aria-label="编辑选中节点" aria-keyshortcuts="E" title="编辑选中节点（E）">
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
-              </button>
-              <div class="node-action-menu-wrap">
-                <button id="nodeMoreButton" class="button button-quiet compact-button" type="button" aria-expanded="false" aria-controls="nodeActionMenu">
-                  <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
-                  更多
-                </button>
-                <div id="nodeActionMenu" class="node-action-menu" hidden>
-                  <button id="toggleVisitedNodeButton" type="button" aria-keyshortcuts="V">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>
-                    <span>标记为已走过</span>
-                  </button>
-                  <button id="toggleEndingNodeButton" type="button" aria-keyshortcuts="Shift+E">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6"/></svg>
-                    <span>标记为结局</span>
-                  </button>
-                  <button id="deleteSelectedNodeButton" class="danger-text" type="button">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M8 7l1 13h6l1-13M10 11v5M14 11v5"/></svg>
-                    删除节点
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
           <p id="currentNodeTags" class="tag-line"></p>
           <p id="currentNodeNote" class="node-note"></p>
+          <div class="current-node-actions">
+            <button id="jumpSelectedNodeButton" class="button button-primary compact-button" type="button" aria-keyshortcuts="J">跳转 <kbd>J</kbd></button>
+            <button id="editCurrentNodeButton" class="button button-quiet compact-button" type="button" aria-label="编辑选中节点" aria-keyshortcuts="E" title="编辑选中节点（E）">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
+              编辑 <kbd>E</kbd>
+            </button>
+            <div class="node-action-menu-wrap">
+              <button id="nodeMoreButton" class="button button-quiet compact-button" type="button" aria-expanded="false" aria-controls="nodeActionMenu">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                更多
+              </button>
+              <div id="nodeActionMenu" class="node-action-menu" hidden>
+                <button id="toggleVisitedNodeButton" type="button" aria-keyshortcuts="V">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>
+                  <span>标记为已走过</span>
+                </button>
+                <button id="toggleEndingNodeButton" type="button" aria-keyshortcuts="Shift+E">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6"/></svg>
+                  <span>标记为结局</span>
+                </button>
+                <button id="deleteSelectedNodeButton" class="danger-text" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M8 7l1 13h6l1-13M10 11v5M14 11v5"/></svg>
+                  删除节点
+                </button>
+              </div>
+            </div>
+          </div>
 
           <div class="section-heading compact">
             <h3>从这里可以前往</h3>
